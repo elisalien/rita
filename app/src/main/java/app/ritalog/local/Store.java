@@ -3,6 +3,7 @@ package app.ritalog.local;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -169,6 +170,46 @@ final class Store {
             }
         }
         return n == 0 ? -1 : Math.round(sum / (float) n);
+    }
+
+    // ---------- moods: {"moods":{"2026-09-18":[{"t":"14:05","m":4,"e":3}]}} ----------
+
+    static final int MOOD_MERGE_MIN = 5;
+
+    static JSONArray moods(JSONObject data, String key) {
+        JSONObject all = data.optJSONObject("moods");
+        JSONArray arr = all == null ? null : all.optJSONArray(key);
+        return arr == null ? new JSONArray() : arr;
+    }
+
+    /** Last entry of today if tapped under 5 min ago with one value still missing, else null. */
+    static JSONObject openMood(JSONObject data) {
+        JSONArray arr = moods(data, keyOf(Calendar.getInstance()));
+        if (arr.length() == 0) return null;
+        JSONObject last = arr.optJSONObject(arr.length() - 1);
+        if (last == null || span(last.optString("t", null), nowHM()) > MOOD_MERGE_MIN) return null;
+        return (!last.has("m") || !last.has("e")) ? last : null;
+    }
+
+    /** Same rule as logMood in app.js: complete or correct the open entry, else start a new one. */
+    static synchronized void logMood(Context c, String kind, int value) {
+        JSONObject data = load(c);
+        try {
+            if (!data.has("moods")) data.put("moods", new JSONObject());
+            JSONObject all = data.getJSONObject("moods");
+            String k = keyOf(Calendar.getInstance());
+            JSONArray arr = all.optJSONArray(k);
+            if (arr == null) {
+                arr = new JSONArray();
+                all.put(k, arr);
+            }
+            JSONObject open = openMood(data);
+            if (open != null) open.put(kind, value);
+            else arr.put(new JSONObject().put("t", nowHM()).put(kind, value));
+            saveRaw(c, data.toString());
+        } catch (JSONException ignored) {
+            // nothing sensible to do from a widget tap
+        }
     }
 
     static String get(JSONObject d, String step) {

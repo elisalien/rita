@@ -21,11 +21,12 @@ import org.json.JSONObject;
 
 /** Hosts the pixel-art web UI (assets/www) and bridges it to the shared SharedPreferences log. */
 public class MainActivity extends Activity {
+    static final String EXTRA_VIEW = "view";
     private static final int SKY = 0xFFCDEAF6, TABBAR = 0xFFFDE9CC, BG = 0xFFF4F8EC;
 
     private WebView web;
     private boolean pageReady;
-    private String pendingStep;
+    private String pendingStep, pendingView;
     private OnBackInvokedCallback backCallback;
 
     @Override
@@ -83,6 +84,7 @@ public class MainActivity extends Activity {
         }
 
         pendingStep = getIntent().getStringExtra(RitaWidget.EXTRA_STEP);
+        pendingView = getIntent().getStringExtra(EXTRA_VIEW);
         web.loadUrl("file:///android_asset/www/index.html");
     }
 
@@ -107,6 +109,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         pendingStep = intent.getStringExtra(RitaWidget.EXTRA_STEP);
+        pendingView = intent.getStringExtra(EXTRA_VIEW);
         flushPendingStep();
     }
 
@@ -127,7 +130,13 @@ public class MainActivity extends Activity {
     }
 
     private void flushPendingStep() {
-        if (!pageReady || pendingStep == null) return;
+        if (!pageReady) return;
+        if (pendingView != null) {
+            String view = JSONObject.quote(pendingView);
+            pendingView = null;
+            web.evaluateJavascript("window.ritaOpenView && ritaOpenView(" + view + ")", null);
+        }
+        if (pendingStep == null) return;
         String step = JSONObject.quote(pendingStep);
         pendingStep = null;
         web.evaluateJavascript("window.ritaOpenStep && ritaOpenStep(" + step + ")", null);

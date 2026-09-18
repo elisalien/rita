@@ -37,8 +37,61 @@
       <button id="today-extra" class="extra fr f-off"></button>
     </section>
 
+    <section id="view-mood" hidden>
+      <div class="dialog-wrap">
+        <div class="nametag fr f-mood">&#9829; humeur</div>
+        <div id="mood-status" class="dialog fr f-wood"></div>
+      </div>
+      <div class="panel fr f-wood pick">
+        <div class="ptitle">humeur</div>
+        <div id="mood-row" class="pick-row"></div>
+        <div class="ptitle">énergie</div>
+        <div id="energy-row" class="pick-row"></div>
+      </div>
+      <div class="panel fr f-wood">
+        <div class="ptitle">aujourd'hui</div>
+        <div id="mood-chart" class="chart-box"></div>
+        <div class="legend">
+          <span><i style="background:#e0668c"></i>humeur</span>
+          <span><i style="background:#d99a1e"></i>énergie</span>
+          <span><i style="background:#ffe6ee"></i>ritaline</span>
+        </div>
+      </div>
+      <div id="mood-list" class="mood-list"></div>
+    </section>
+
     <section id="view-journal" hidden>
       <div id="averages" class="panel fr f-wood"></div>
+      <div class="panel fr f-wood">
+        <div class="ptitle">durée d'effet par jour</div>
+        <div id="chart-dur" class="chart-box"></div>
+        <div class="legend">
+          <span><i style="background:#ffb8cb"></i>montée</span>
+          <span><i style="background:#bfe6a6"></i>plateau</span>
+          <span><i style="background:#ffc9a3"></i>descente</span>
+        </div>
+      </div>
+      <div class="panel fr f-wood">
+        <div class="ptitle">ta courbe type</div>
+        <div id="chart-curve" class="chart-box"></div>
+      </div>
+      <div class="panel fr f-wood">
+        <div class="ptitle">humeur et énergie par jour</div>
+        <div id="chart-moods" class="chart-box"></div>
+        <div class="legend">
+          <span><i style="background:#e0668c"></i>humeur</span>
+          <span><i style="background:#d99a1e"></i>énergie</span>
+        </div>
+      </div>
+      <div class="panel fr f-wood">
+        <div class="ptitle">humeur selon la phase</div>
+        <div id="chart-phase" class="chart-box"></div>
+        <div class="legend">
+          <span><i style="background:#e0668c"></i>humeur</span>
+          <span><i style="background:#d99a1e"></i>énergie</span>
+        </div>
+      </div>
+      <div class="ptitle days-title">tous les jours</div>
       <div id="days" class="days"></div>
       <div class="row">
         <button id="add-day" class="btn fr f-peak">+ un jour</button>
@@ -50,7 +103,8 @@
   </main>
 
   <nav class="tabs">
-    <button data-view="today" class="tab fr f-wood on">aujourd'hui</button>
+    <button data-view="today" class="tab fr f-wood on">rita</button>
+    <button data-view="mood" class="tab fr f-off">humeur</button>
     <button data-view="journal" class="tab fr f-off">journal</button>
   </nav>
 
@@ -64,6 +118,7 @@
   </div>
 </div>
 <script src="sprites.js"></script>
+<script src="charts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

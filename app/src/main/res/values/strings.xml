@@ -3,5 +3,7 @@
     <string name="app_name">Rita</string>
     <string name="widget_name">Rita · ma journée</string>
     <string name="widget_desc">Un tap pour noter réveil, prise, pic, chute et zéro</string>
+    <string name="mood_widget_name">Rita · humeur</string>
+    <string name="mood_widget_desc">Note ton humeur et ton énergie en un tap, autant de fois que tu veux</string>
     <string name="share_title">Exporter mes données Rita</string>
 </resources>

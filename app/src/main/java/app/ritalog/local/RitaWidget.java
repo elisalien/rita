@@ -58,6 +58,7 @@ public class RitaWidget extends AppWidgetProvider {
         int[] ids = m.getAppWidgetIds(new ComponentName(c, RitaWidget.class));
         for (int id : ids) update(c, m, id);
         if (ids.length > 0) scheduleTick(c);
+        MoodWidget.updateAll(c); // day rollover for the mood widget too
     }
 
     private static void update(Context c, AppWidgetManager m, int id) {

@@ -17,10 +17,10 @@ import java.util.Map;
  * tools/widget_preview.py mirrors this drawing for the widget picker preview.
  */
 final class WidgetRenderer {
-    private static final int INK = 0xFF6B4F5C, INK2 = 0xFFA58C98, PINK = 0xFFFF8FAE;
-    private static final int CREAM = 0xFFFFFAF0, SKY = 0xFFCDEAF6, GRASS = 0xFFBFE3B0, GRASS2 = 0xFFA6D49A;
-    private static final int[] WOOD = {0xFFA8806C, 0xFFF2CDA4, 0xFFFDE9CC, 0xFFFFFAF0};
-    private static final int[] OFF = {0xFFCDB9A8, 0xFFEFE3D3, 0xFFFFFAF0, 0xFFFFFAF0};
+    static final int INK = 0xFF6B4F5C, INK2 = 0xFFA58C98, PINK = 0xFFFF8FAE;
+    static final int CREAM = 0xFFFFFAF0, SKY = 0xFFCDEAF6, GRASS = 0xFFBFE3B0, GRASS2 = 0xFFA6D49A;
+    static final int[] WOOD = {0xFFA8806C, 0xFFF2CDA4, 0xFFFDE9CC, 0xFFFFFAF0};
+    static final int[] OFF = {0xFFCDB9A8, 0xFFEFE3D3, 0xFFFFFAF0, 0xFFFFFAF0};
     private static final int[][] STEP_PAL = {
             {0xFFD9A54A, 0xFFFFE08A, 0xFFFFF4CF},
             {0xFFD47C98, 0xFFFFB8CB, 0xFFFFE6EE},
@@ -109,7 +109,7 @@ final class WidgetRenderer {
         return bmp;
     }
 
-    private static Paint textPaint(Context c, int u) {
+    static Paint textPaint(Context c, int u) {
         if (font == null) {
             try {
                 font = Typeface.createFromAsset(c.getAssets(), "www/pixel.ttf");
@@ -124,7 +124,7 @@ final class WidgetRenderer {
         return tp;
     }
 
-    private static String dateLabel(String key) {
+    static String dateLabel(String key) {
         String[] parts = key.split("-");
         Calendar cal = Calendar.getInstance();
         cal.set(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]) - 1, Integer.parseInt(parts[2]));
@@ -177,7 +177,7 @@ final class WidgetRenderer {
         }
     }
 
-    private static void drawSprite(Canvas cv, Paint p, Sprites.Sprite s, int x, int y, int scale, int alpha) {
+    static void drawSprite(Canvas cv, Paint p, Sprites.Sprite s, int x, int y, int scale, int alpha) {
         for (int j = 0; j < s.h; j++) {
             for (int i = 0; i < s.w; i++) {
                 int c = s.argb[j * s.w + i];

@@ -1,9 +1,10 @@
 (function () {
   'use strict';
 
-  // In the APK, MainActivity exposes RitaBridge (SharedPreferences, shared with the widget).
+  // In the APK, MainActivity exposes RitaBridge (SharedPreferences, shared with the widgets).
   // In a desktop browser we fall back to localStorage so the UI can be previewed.
   const Native = window.RitaBridge || null;
+  const Charts = window.RitaCharts;
 
   const STEPS = [
     { key: 'wake', label: 'Réveil', noted: 'Réveil noté', sprite: 'sun', hint: 'je me lève', pal: ['#d9a54a', '#ffe08a', '#fff4cf'] },
@@ -19,6 +20,10 @@
     ['peak', 'drop', '#bfe6a6'],
     ['drop', 'zero', '#ffc9a3'],
   ];
+  const PHASE_COLORS = [[BY.dose.pal[0], '#ffb8cb'], [BY.peak.pal[0], '#bfe6a6'], [BY.drop.pal[0], '#ffc9a3']];
+  const MOOD_WORDS = ['', 'très mal', 'pas top', 'bof', 'bien', 'super'];
+  const ENERGY_WORDS = ['', 'à plat', 'faible', 'moyenne', 'bonne', 'à fond'];
+  const MOOD_MERGE_MIN = 5; // a mood and an energy tapped within 5 min form one entry
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -31,9 +36,9 @@
     try {
       const raw = Native ? Native.load() : localStorage.getItem('rita');
       const d = raw ? JSON.parse(raw) : null;
-      if (d && d.days) return d;
+      if (d && d.days) { if (!d.moods) d.moods = {}; return d; }
     } catch (e) { /* fresh start */ }
-    return { v: 1, days: {} };
+    return { v: 1, days: {}, moods: {} };
   }
 
   function save() {
@@ -63,6 +68,7 @@
   const keyOf = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   const dateOf = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
   const dateLabel = k => dateOf(k).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
 
   // After midnight, taps still belong to yesterday until its "zéro" is logged (until 5h).
   function activeKey() {
@@ -79,7 +85,7 @@
   // ---------- stats ----------
   function stats(limit) {
     const keys = Object.keys(data.days).sort().reverse();
-    const acc = { rise: [], plateau: [], fall: [], total: [], wait: [], toPeak: [], toDrop: [] };
+    const acc = { rise: [], plateau: [], fall: [], total: [], wait: [], toDrop: [] };
     let n = 0;
     for (const k of keys) {
       const d = data.days[k];
@@ -94,9 +100,8 @@
       push(acc.wait, span(d.wake, d.dose));
       push(acc.toDrop, span(d.dose, d.drop));
     }
-    const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
     const out = { n };
-    for (const k in acc) out[k] = avg(acc[k]);
+    for (const k in acc) out[k] = acc[k].length ? Math.round(avg(acc[k])) : null;
     out.totalMin = acc.total.length ? Math.min(...acc.total) : null;
     out.totalMax = acc.total.length ? Math.max(...acc.total) : null;
     out.totalN = acc.total.length;
@@ -107,6 +112,47 @@
     const keys = Object.keys(data.days).sort().reverse();
     for (const k of keys) if (k < beforeKey && data.days[k].mg != null) return data.days[k].mg;
     return null;
+  }
+
+  // ---------- moods ----------
+  const moodsOf = k => data.moods[k] || [];
+
+  /** The entry still open for completion (tapped less than 5 min ago, one value missing), if any. */
+  function openEntry() {
+    const arr = moodsOf(keyOf(new Date()));
+    const last = arr[arr.length - 1];
+    if (!last || span(last.t, nowHM()) > MOOD_MERGE_MIN) return null;
+    return (last.m == null || last.e == null) ? last : null;
+  }
+
+  /** Same rule as Store.logMood (Java): complete or correct the open entry, else start a new one. */
+  function logMood(kind, v) {
+    const k = keyOf(new Date());
+    const arr = data.moods[k] || (data.moods[k] = []);
+    const open = openEntry();
+    if (open) open[kind] = v;
+    else arr.push({ t: nowHM(), [kind]: v });
+    save();
+  }
+
+  // Which Rita phase a time falls in: 0 avant, 1 montée, 2 plateau, 3 descente, 4 après.
+  function phaseOf(d, t) {
+    if (!d.dose) return null;
+    const m = toMin(t), rel = x => (toMin(x) - toMin(d.dose) + 1440) % 1440;
+    if (m < toMin(d.dose) && (!d.wake || m >= toMin(d.wake) - 60)) return 0;
+    const r = rel(t);
+    if (r > 20 * 60) return 0;
+    if (!d.peak || r < rel(d.peak)) return 1;
+    if (!d.drop || r < rel(d.drop)) return 2;
+    if (!d.zero || r < rel(d.zero)) return 3;
+    return 4;
+  }
+
+  function moodDayAvg(k) {
+    const arr = moodsOf(k);
+    const m = avg(arr.filter(x => x.m != null).map(x => x.m));
+    const e = avg(arr.filter(x => x.e != null).map(x => x.e));
+    return { m, e, n: arr.length };
   }
 
   // ---------- pixel art ----------
@@ -144,6 +190,8 @@
       `.f-wood{--frame:${frameURI('#a8806c', '#f2cda4', '#fde9cc', '#fffaf0')}}`,
       `.f-off{--frame:${frameURI('#cdb9a8', '#efe3d3', '#fffaf0', '#fffaf0')}}`,
       `.f-paper{--frame:${frameURI('#b99c8a', '#f5e3cc', '#fffaf0', '#fffaf0')}}`,
+      `.f-mood{--frame:${frameURI('#cc6f8c', '#ffb8cb', '#ffe6ee', '#ffe6ee')}}`,
+      `.f-energy{--frame:${frameURI('#c9a24e', '#ffe08a', '#fff4cf', '#fff4cf')}}`,
     ];
     for (const s of STEPS) {
       const [D, W, L] = s.pal;
@@ -196,7 +244,7 @@
     return h + '</div></div>';
   }
 
-  // ---------- today ----------
+  // ---------- today (rita) ----------
   function nextStep(d) {
     let last = -1;
     STEPS.forEach((s, i) => { if (d[s.key]) last = i; });
@@ -206,7 +254,7 @@
   function statusHTML(k, d, st) {
     const now = nowHM();
     const since = key => fmtDur(span(d[key], now));
-    const pred = (avg) => (d.dose && avg != null) ? fmtHM(addMin(d.dose, avg)) : null;
+    const pred = (a) => (d.dose && a != null) ? fmtHM(addMin(d.dose, a)) : null;
     const lines = [];
     if (d.zero) {
       lines.push('Journée bouclée !');
@@ -236,8 +284,7 @@
   }
 
   function stepHint(s, d, st) {
-    const done = !!d[s.key];
-    if (done) {
+    if (d[s.key]) {
       if (s.key === 'dose' && d.wake) return `${fmtDur(span(d.wake, d.dose))} après le réveil`;
       if (s.key === 'peak' && d.dose) return `montée : ${fmtDur(span(d.dose, d.peak))}`;
       if (s.key === 'drop' && d.peak) return `plateau : ${fmtDur(span(d.peak, d.drop))}`;
@@ -245,19 +292,24 @@
       return s.hint;
     }
     if (d.dose) {
-      const avg = { peak: st.rise, drop: st.toDrop, zero: st.total }[s.key];
-      if (avg != null) return `prévu ~${fmtHM(addMin(d.dose, avg))}`;
+      const a = { peak: st.rise, drop: st.toDrop, zero: st.total }[s.key];
+      if (a != null) return `prévu ~${fmtHM(addMin(d.dose, a))}`;
     }
     return s.hint;
+  }
+
+  function renderHeader(k, d) {
+    $('#date').textContent = dateLabel(k);
+    const doseDays = Object.keys(data.days).filter(x => data.days[x].dose && x <= k).length;
+    $('#daycount').innerHTML = d.dose ? `jour ${doseDays} de traitement &#9829;`
+      : doseDays ? `${doseDays} jour${doseDays > 1 ? 's' : ''} noté${doseDays > 1 ? 's' : ''} &#9829;` : 'premier jour ? courage &#9829;';
   }
 
   function renderToday() {
     const k = activeKey();
     const d = day(k);
     const st = stats(14);
-    $('#date').textContent = dateLabel(k);
-    const doseDays = Object.keys(data.days).filter(x => data.days[x].dose && x <= k).length;
-    $('#daycount').innerHTML = d.dose ? `jour ${doseDays} de traitement &#9829;` : doseDays ? `${doseDays} jour${doseDays > 1 ? 's' : ''} noté${doseDays > 1 ? 's' : ''} &#9829;` : 'premier jour ? courage &#9829;';
+    renderHeader(k, d);
     $('#status').innerHTML = statusHTML(k, d, st);
     const next = nextStep(d);
     $('#steps').innerHTML = STEPS.map(s => {
@@ -269,11 +321,57 @@
         <span class="time">${fmtHM(d[s.key])}</span>
       </button>`;
     }).join('');
-    $('#today-bar').innerHTML = barHTML(d, k === keyOf(new Date()) || k === activeKey());
+    $('#today-bar').innerHTML = barHTML(d, true);
     const bits = [];
     bits.push(d.mg != null ? `dose : ${esc(d.mg)} mg` : 'dose : ? mg');
     bits.push(d.note ? esc(d.note) : 'ajouter une note');
     $('#today-extra').innerHTML = bits.join(' · ');
+  }
+
+  // ---------- humeur ----------
+  function phaseBands(d) {
+    const bands = [];
+    [['dose', 'peak', '#ffe6ee'], ['peak', 'drop', '#ebf8e2'], ['drop', 'zero', '#ffeede']].forEach(([a, b, color]) => {
+      if (!d[a]) return;
+      const end = d[b] || (STEPS.slice(STEPS.findIndex(s => s.key === b)).some(s => d[s.key]) ? null : nowHM());
+      if (!end) return;
+      let from = toMin(d[a]), to = toMin(end);
+      if (to < from) to += 1440;
+      bands.push({ from, to, color });
+    });
+    return bands;
+  }
+
+  function renderMood() {
+    const k = keyOf(new Date());
+    renderHeader(activeKey(), day(activeKey()));
+    const open = openEntry();
+    const arr = moodsOf(k);
+    let msg;
+    if (open && open.e == null) msg = `Humeur notée : ${MOOD_WORDS[open.m]}.<br><span class="soft">Et ton énergie ?</span>`;
+    else if (open && open.m == null) msg = `Énergie notée : ${ENERGY_WORDS[open.e]}.<br><span class="soft">Et ton humeur ?</span>`;
+    else if (arr.length) {
+      const last = arr[arr.length - 1];
+      msg = `Dernière fois à ${fmtHM(last.t)} &#9829;<br><span class="soft">${arr.length} fois aujourd'hui. Reviens quand tu veux.</span>`;
+    } else msg = 'Comment ça va ?<br><span class="soft">Touche une tête et une pile.</span>';
+    $('#mood-status').innerHTML = `<p>${msg}</p>`;
+    const row = (kind, prefix, words, cls) => [1, 2, 3, 4, 5].map(v => {
+      const on = open && open[kind] === v;
+      return `<button class="mood-btn fr ${on ? cls : 'f-off'}" data-kind="${kind}" data-v="${v}" aria-label="${words[v]}">${spr(prefix + v, 3)}</button>`;
+    }).join('');
+    $('#mood-row').innerHTML = row('m', 'mood', MOOD_WORDS, 'f-mood');
+    $('#energy-row').innerHTML = row('e', 'bat', ENERGY_WORDS, 'f-energy');
+
+    const d = day(k);
+    const entries = arr.map(x => ({ min: toMin(x.t), m: x.m, e: x.e }));
+    Charts.dayMood($('#mood-chart'), entries, phaseBands(d), toMin(nowHM()));
+    $('#mood-list').innerHTML = arr.length ? arr.map((x, i) => `
+      <button class="mood-item" data-i="${i}">
+        <span class="t">${fmtHM(x.t)}</span>
+        ${x.m != null ? spr('mood' + x.m, 2) : '<span class="nil"></span>'}
+        ${x.e != null ? spr('bat' + x.e, 2) : '<span class="nil"></span>'}
+        <span class="w">${[x.m != null ? MOOD_WORDS[x.m] : null, x.e != null ? 'énergie ' + ENERGY_WORDS[x.e] : null].filter(Boolean).join(' · ')}</span>
+      </button>`).reverse().join('') : '<div class="empty">Rien encore aujourd\'hui.</div>';
   }
 
   // ---------- journal ----------
@@ -286,33 +384,73 @@
     } else {
       let h = `<div class="ptitle">moyennes · ${st.n} jour${st.n > 1 ? 's' : ''}</div>`;
       h += row(null, 'durée totale', '', st.total, true);
-      if (st.totalN > 1) h += `<div class="avg-row"><span class="k soft" style="color:var(--ink2)">entre ${fmtDur(st.totalMin)} et ${fmtDur(st.totalMax)}</span></div>`;
+      if (st.totalN > 1) h += `<div class="avg-row"><span class="k" style="color:var(--ink2)">entre ${fmtDur(st.totalMin)} et ${fmtDur(st.totalMax)}</span></div>`;
       h += row('#ffb8cb', 'montée', 'prise→pic', st.rise);
       h += row('#bfe6a6', 'plateau', 'pic→chute', st.plateau);
       h += row('#ffc9a3', 'descente', 'chute→zéro', st.fall);
       h += row('#efe3d3', 'attente', 'réveil→prise', st.wait);
       $('#averages').innerHTML = h;
     }
-    const keys = Object.keys(data.days).sort().reverse();
-    if (!keys.length) { $('#days').innerHTML = ''; return; }
+    renderCharts(st);
+
+    const keys = [...new Set([...Object.keys(data.days), ...Object.keys(data.moods).filter(k => moodsOf(k).length)])].sort().reverse();
     const today = activeKey();
     $('#days').innerHTML = keys.map(k => {
-      const d = data.days[k];
+      const d = day(k);
       const sum = [];
       if (d.dose && d.peak) sum.push(`pic +${fmtDur(span(d.dose, d.peak))}`);
       if (d.dose && d.zero) sum.push(`total ${fmtDur(span(d.dose, d.zero))}`);
-      if (!sum.length) sum.push(STEPS.filter(s => d[s.key]).map(s => s.label).join(', ') || 'vide');
+      const md = moodDayAvg(k);
+      const moodBit = md.n ? `<span class="day-mood">${md.m != null ? spr('mood' + Math.round(md.m), 1) : ''}${md.e != null ? spr('bat' + Math.round(md.e), 1) : ''}</span>` : '';
+      if (!sum.length) sum.push(STEPS.filter(s => d[s.key]).map(s => s.label).join(', ') || (md.n ? `${md.n} humeur${md.n > 1 ? 's' : ''}` : 'vide'));
       return `<button class="day fr f-paper" data-day="${k}">
         <div class="day-head"><span>${dateLabel(k)}${k === today ? ' &#9829;' : ''}</span><span>${d.mg != null ? esc(d.mg) + ' mg' : ''}</span></div>
         ${barHTML(d, false)}
-        <div class="day-sum">${sum.join(' · ')}</div>
+        <div class="day-sum">${moodBit}${sum.join(' · ')}</div>
         ${d.note ? `<div class="day-note">${esc(d.note)}</div>` : ''}
       </button>`;
     }).join('');
   }
 
+  function renderCharts(st) {
+    const shortLabel = k => String(+k.slice(8));
+    const dosed = Object.keys(data.days).filter(k => data.days[k].dose).sort().slice(-14);
+    const box = (id, show) => { $(id).closest('.panel').hidden = !show; return show; };
+
+    if (box('#chart-dur', dosed.length > 0)) {
+      Charts.durations($('#chart-dur'), dosed.map(k => {
+        const d = data.days[k];
+        return { label: shortLabel(k), rise: span(d.dose, d.peak), plateau: span(d.peak, d.drop), fall: span(d.drop, d.zero), total: span(d.dose, d.zero) };
+      }), PHASE_COLORS);
+    }
+    if (box('#chart-curve', st.rise != null && st.plateau != null && st.fall != null)) {
+      Charts.curve($('#chart-curve'), st, PHASE_COLORS);
+    }
+    const moodKeys = Object.keys(data.moods).filter(k => moodsOf(k).length).sort().slice(-14);
+    if (box('#chart-moods', moodKeys.length > 0)) {
+      Charts.moodDays($('#chart-moods'), moodKeys.map(k => ({ label: shortLabel(k), ...moodDayAvg(k) })));
+    }
+    const groups = [0, 1, 2, 3, 4].map(() => ({ m: [], e: [] }));
+    for (const k of Object.keys(data.moods)) {
+      const d = data.days[k];
+      if (!d) continue;
+      for (const x of moodsOf(k)) {
+        const p = phaseOf(d, x.t);
+        if (p == null) continue;
+        if (x.m != null) groups[p].m.push(x.m);
+        if (x.e != null) groups[p].e.push(x.e);
+      }
+    }
+    const anyPhase = groups.some(g => g.m.length || g.e.length);
+    if (box('#chart-phase', anyPhase)) {
+      Charts.phases($('#chart-phase'), groups.map((g, i) => ({ sprite: ['sun', 'pill', 'star', 'leaf', 'moon'][i], m: avg(g.m), e: avg(g.e) })));
+    }
+  }
+
   function render() {
-    if (view === 'today') renderToday(); else renderJournal();
+    if (view === 'today') renderToday();
+    else if (view === 'mood') renderMood();
+    else renderJournal();
   }
 
   // ---------- actions ----------
@@ -334,7 +472,7 @@
       const h = document.createElement('span');
       h.className = 'heartfx';
       h.innerHTML = '&#9829;';
-      h.style.left = (r.left + 30 + i * 10) + 'px';
+      h.style.left = (r.left + r.width / 2 - 20 + i * 10) + 'px';
       h.style.top = (r.top + 8) + 'px';
       h.style.setProperty('--dx', ((i - 1.5) * 14) + 'px');
       h.style.animationDelay = (i * 70) + 'ms';
@@ -397,6 +535,54 @@
     });
   }
 
+  function openMoodSheet(k, i) {
+    const x = moodsOf(k)[i];
+    if (!x) return;
+    const sel = { m: x.m, e: x.e };
+    const pick = (kind, prefix) => [1, 2, 3, 4, 5].map(v =>
+      `<button class="mood-btn small fr ${sel[kind] === v ? (kind === 'm' ? 'f-mood' : 'f-energy') : 'f-off'}" data-kind="${kind}" data-v="${v}">${spr(prefix + v, 2)}</button>`).join('');
+    openSheet(`
+      <div class="sh-title">${spr('mood' + (x.m || 3), 2)}<span>Humeur</span></div>
+      <div class="sh-sub">${dateLabel(k)}</div>
+      <input id="sh-time" class="field" type="time" value="${x.t}">
+      <div class="pick-row" data-row="m">${pick('m', 'mood')}</div>
+      <div class="pick-row" data-row="e">${pick('e', 'bat')}</div>
+      <div class="sh-row">
+        <button id="sh-del" class="btn fr f-off danger">supprimer</button>
+        <button id="sh-cancel" class="btn fr f-off">annuler</button>
+        <button id="sh-ok" class="btn fr f-mood">ok &#9829;</button>
+      </div>`, box => {
+      box.querySelectorAll('.pick-row .mood-btn').forEach(b => {
+        b.onclick = () => {
+          const kind = b.dataset.kind, v = +b.dataset.v;
+          sel[kind] = sel[kind] === v ? null : v;
+          box.querySelectorAll(`.mood-btn[data-kind="${kind}"]`).forEach(o => {
+            const on = sel[kind] === +o.dataset.v;
+            o.classList.toggle(kind === 'm' ? 'f-mood' : 'f-energy', on);
+            o.classList.toggle('f-off', !on);
+          });
+        };
+      });
+      box.querySelector('#sh-cancel').onclick = closeSheet;
+      box.querySelector('#sh-del').onclick = () => {
+        moodsOf(k).splice(i, 1);
+        if (!moodsOf(k).length) delete data.moods[k];
+        save(); closeSheet(); render();
+      };
+      box.querySelector('#sh-ok').onclick = () => {
+        const t = box.querySelector('#sh-time').value || x.t;
+        const next = { t };
+        if (sel.m != null) next.m = sel.m;
+        if (sel.e != null) next.e = sel.e;
+        const arr = moodsOf(k);
+        if (next.m == null && next.e == null) arr.splice(i, 1); else arr[i] = next;
+        arr.sort((a, b) => a.t.localeCompare(b.t));
+        if (!arr.length) delete data.moods[k];
+        save(); closeSheet(); render();
+      };
+    });
+  }
+
   function openDaySheet(k) {
     const d = day(k);
     const mg = d.mg != null ? d.mg : (lastMg(k) ?? '');
@@ -421,7 +607,7 @@
       box.querySelector('#sh-cancel').onclick = closeSheet;
       const del = box.querySelector('#sh-del');
       del.onclick = () => {
-        if (del.dataset.armed) { delete data.days[k]; save(); closeSheet(); render(); return; }
+        if (del.dataset.armed) { delete data.days[k]; delete data.moods[k]; save(); closeSheet(); render(); return; }
         del.dataset.armed = '1';
         del.textContent = 'sûr ?';
       };
@@ -478,8 +664,10 @@
         try {
           const inc = JSON.parse(box.querySelector('#im-text').value);
           if (!inc || typeof inc.days !== 'object') throw new Error('format');
+          const keyOk = k => /^\d{4}-\d\d-\d\d$/.test(k);
           let n = 0;
-          for (const k in inc.days) if (/^\d{4}-\d\d-\d\d$/.test(k)) { data.days[k] = inc.days[k]; n++; }
+          for (const k in inc.days) if (keyOk(k)) { data.days[k] = inc.days[k]; n++; }
+          for (const k in (inc.moods || {})) if (keyOk(k) && Array.isArray(inc.moods[k])) data.moods[k] = inc.moods[k];
           save(); closeSheet(); render();
           toast(`${n} jour${n > 1 ? 's' : ''} importé${n > 1 ? 's' : ''} &#9829;`);
         } catch (e) {
@@ -492,6 +680,7 @@
   function setView(v) {
     view = v;
     $('#view-today').hidden = v !== 'today';
+    $('#view-mood').hidden = v !== 'mood';
     $('#view-journal').hidden = v !== 'journal';
     document.querySelectorAll('.tab').forEach(t => {
       const on = t.dataset.view === v;
@@ -514,6 +703,18 @@
     const k = activeKey();
     if (day(k)[key]) openStepSheet(k, key); else logNow(key);
   });
+  $('#view-mood').addEventListener('click', e => {
+    const b = e.target.closest('.mood-btn');
+    if (b && !b.closest('.sheet')) {
+      logMood(b.dataset.kind, +b.dataset.v);
+      render();
+      const again = document.querySelector(`#view-mood .mood-btn[data-kind="${b.dataset.kind}"][data-v="${b.dataset.v}"]`);
+      if (again) { again.classList.add('pop'); hearts(again); }
+      return;
+    }
+    const item = e.target.closest('.mood-item');
+    if (item) openMoodSheet(keyOf(new Date()), +item.dataset.i);
+  });
   $('#days').addEventListener('click', e => {
     const b = e.target.closest('.day');
     if (b) openDaySheet(b.dataset.day);
@@ -526,15 +727,19 @@
   document.querySelectorAll('.tab').forEach(t => { t.onclick = () => setView(t.dataset.view); });
 
   // Called by MainActivity.
-  window.ritaRefresh = () => { data = load(); render(); };
+  window.ritaRefresh = () => { data = load(); if ($('#sheet').hidden) render(); };
   window.ritaOpenStep = key => { setView('today'); if (BY[key]) openStepSheet(activeKey(), key); };
+  window.ritaOpenView = v => { closeSheet(); setView(v === 'mood' ? 'mood' : v === 'journal' ? 'journal' : 'today'); };
   window.ritaBack = () => {
     if (!$('#sheet').hidden) { closeSheet(); return true; }
     if (view !== 'today') { setView('today'); return true; }
     return false;
   };
 
-  setInterval(() => { if (view === 'today' && $('#sheet').hidden) renderToday(); }, 30000);
+  setInterval(() => { if (view !== 'journal' && $('#sheet').hidden) render(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) window.ritaRefresh(); });
+  window.addEventListener('resize', () => { if (view !== 'today') render(); });
   render();
+  // Charts draw text with the pixel font; redraw once it is ready.
+  if (document.fonts) document.fonts.load('8px RitaPixel').then(() => render());
 })();

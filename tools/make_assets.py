@@ -227,6 +227,62 @@ def load_sprites():
     return sprites
 
 
+FACE = [
+    ".....oooooo.....",
+    "...oohhhbbboo...",
+    "..ohhbbbbbbbbo..",
+    ".ohbbbbbbbbbbbo.",
+    ".ohbbbbbbbbbbbo.",
+    "ohbbbbbbbbbbbbbo",
+    "obbbbbbbbbbbbbbo",
+    "obbbbbbbbbbbbbbo",
+    "obbbbbbbbbbbbbbo",
+    "obbbbbbbbbbbbbbo",
+    "obbbbbbbbbbbbbbo",
+    ".obbbbbbbbbbbbo.",
+    ".obbbbbbbbbbbbo.",
+    "..obbbbbbbbbbo..",
+    "...oobbbbbboo...",
+    ".....oooooo.....",
+]
+DOT_EYES = [(5, 6), (5, 7), (10, 6), (10, 7)]
+# mood 1..5: palette, then feature pixels as (x, y, color key)
+MOODS = {
+    1: ({"o": "#7d8cc4", "b": "#c8d3f7", "h": "#e6ebff", "t": "#8ec5ff"},
+        [(4, 6, "o"), (5, 7, "o"), (11, 6, "o"), (10, 7, "o"), (4, 8, "t"), (4, 9, "t"), (11, 8, "t"), (11, 9, "t"),
+         (5, 12, "o"), (6, 11, "o"), (7, 10, "o"), (8, 10, "o"), (9, 11, "o"), (10, 12, "o")]),
+    2: ({"o": "#8e97ab", "b": "#d6ddea", "h": "#eef1f6"},
+        [(x, y, "o") for x, y in DOT_EYES] + [(6, 11, "o"), (7, 10, "o"), (8, 10, "o"), (9, 11, "o")]),
+    3: ({"o": "#c9a24e", "b": "#ffe8a8", "h": "#fff6d6"},
+        [(x, y, "o") for x, y in DOT_EYES] + [(6, 10, "o"), (7, 10, "o"), (8, 10, "o"), (9, 10, "o")]),
+    4: ({"o": "#6fae67", "b": "#c6ecc0", "h": "#e6f8e2", "k": "#ffb0c0"},
+        [(x, y, "o") for x, y in DOT_EYES] + [(3, 9, "k"), (12, 9, "k"),
+                                              (6, 10, "o"), (7, 11, "o"), (8, 11, "o"), (9, 10, "o")]),
+    5: ({"o": "#cc6f8c", "b": "#ffc2d4", "h": "#ffe4ec", "k": "#ff8fae", "r": "#ff7096"},
+        [(4, 7, "o"), (5, 6, "o"), (6, 7, "o"), (9, 7, "o"), (10, 6, "o"), (11, 7, "o"), (3, 9, "k"), (12, 9, "k"),
+         (5, 9, "o"), (6, 9, "o"), (7, 9, "o"), (8, 9, "o"), (9, 9, "o"), (10, 9, "o"),
+         (6, 10, "o"), (7, 10, "r"), (8, 10, "r"), (9, 10, "o"), (7, 11, "o"), (8, 11, "o")]),
+}
+BATTERY_COLORS = {1: "#ff9f9f", 2: "#ffb98a", 3: "#ffd86b", 4: "#a8dc98", 5: "#7fcf8a"}
+
+
+def gen_mood_sprites():
+    out = {}
+    for level, (pal, feats) in MOODS.items():
+        grid = [list(r) for r in FACE]
+        for x, y, c in feats:
+            grid[y][x] = c
+        out[f"mood{level}"] = {"palette": pal, "rows": ["".join(r) for r in grid]}
+    for level, fill in BATTERY_COLORS.items():
+        rows = ["................", "......oooo......", "....oooooooo...."]
+        for seg in range(5, 0, -1):  # segment 5 at the top, 1 at the bottom
+            c = "f" if seg <= level else "w"
+            rows += ["....ow" + c * 4 + "wo...."] * 2
+        rows += ["....owwwwwwo....", "....oooooooo....", "................"]
+        out[f"bat{level}"] = {"palette": {"o": "#8a7080", "w": "#fffaf0", "f": fill}, "rows": rows}
+    return out
+
+
 def hex_rgba(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
@@ -270,6 +326,7 @@ def main():
     os.makedirs(WWW, exist_ok=True)
     build_font(os.path.join(WWW, "pixel.ttf"))
     sprites = load_sprites()
+    sprites.update(gen_mood_sprites())
     with open(os.path.join(WWW, "sprites.js"), "w", encoding="utf-8") as f:
         f.write("window.SPRITES=" + json.dumps(sprites, separators=(",", ":")) + ";\n")
     build_icons(sprites)

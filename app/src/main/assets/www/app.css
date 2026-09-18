@@ -312,3 +312,24 @@ textarea.field { font-size: 16px; line-height: 24px; height: 160px; resize: none
   to { transform: translate(var(--dx), -64px); opacity: 0; }
 }
 .bar.live { margin-top: 26px; }
+
+/* ---------- humeur ---------- */
+.pick .ptitle { margin: 2px 0 4px; }
+.pick-row { display: flex; justify-content: space-between; gap: 4px; margin-bottom: 6px; }
+.mood-btn { flex: 1; display: flex; justify-content: center; padding: 2px 0; filter: drop-shadow(0 3px 0 rgba(107, 79, 92, .15)); }
+.mood-btn:active { transform: translateY(2px); filter: none; }
+.mood-btn.pop .spr { animation: pop .5s steps(5); }
+.sheet .pick-row { margin-top: 10px; }
+.chart-box { margin: 2px 0; min-height: 40px; }
+canvas.chart { display: block; image-rendering: pixelated; }
+.legend.small { justify-content: center; }
+.mood-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.mood-item { display: flex; align-items: center; gap: 8px; padding: 2px 6px; width: 100%; }
+.mood-item .t { width: 52px; }
+.mood-item .w { color: var(--ink2); flex: 1; min-width: 0; }
+.mood-item .nil { width: 32px; }
+.day-mood { display: inline-flex; gap: 2px; vertical-align: -3px; margin-right: 6px; }
+.days-title { margin: 4px 4px 8px; }
+.mood-btn { min-width: 0; }
+.mood-btn .spr { width: 100%; max-width: 48px; height: auto; }
+.sheet .mood-btn .spr { max-width: 32px; }
