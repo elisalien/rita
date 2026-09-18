@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Rita" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/sky</item>
+        <item name="android:colorAccent">#FFB8CB</item>
+        <item name="android:colorPrimary">#FFB8CB</item>
+    </style>
+    <color name="sky">#CDEAF6</color>
+</resources>

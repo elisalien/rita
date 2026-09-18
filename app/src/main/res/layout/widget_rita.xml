@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The whole widget is one pixel-art bitmap (WidgetRenderer); these empty zones only catch taps.
+     Zone proportions must match WidgetRenderer: header = top quarter, then five equal columns. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@string/widget_name" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/zone_head"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="3"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <FrameLayout android:id="@+id/zone_wake" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" />
+            <FrameLayout android:id="@+id/zone_dose" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" />
+            <FrameLayout android:id="@+id/zone_peak" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" />
+            <FrameLayout android:id="@+id/zone_drop" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" />
+            <FrameLayout android:id="@+id/zone_zero" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

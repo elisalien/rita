@@ -1,0 +1,120 @@
+{
+  "sun": {
+    "palette": { "o": "#c98450", "y": "#ffe08a", "Y": "#fff6cc", "r": "#ffc36b", "p": "#ff9eb0" },
+    "rows": [
+      "................",
+      ".......rr.......",
+      "..rr...rr...rr..",
+      "..rrr......rrr..",
+      "......oooo......",
+      ".....oYyyyo.....",
+      "....oYYyyyyo....",
+      ".rr.oyyyyyyo.rr.",
+      ".rr.oyoyyoyo.rr.",
+      "....opyyyypo....",
+      ".....oyyyyo.....",
+      "......oooo......",
+      "..rrr......rrr..",
+      "..rr...rr...rr..",
+      ".......rr.......",
+      "................"
+    ]
+  },
+  "pill": {
+    "palette": { "o": "#b0607a", "p": "#ffb3c7", "P": "#ffe0ea", "w": "#fffaf3", "k": "#ff9eb0" },
+    "rows": [
+      "................",
+      "................",
+      "................",
+      "................",
+      "...oooooooooo...",
+      "..oPpppowwwwwo..",
+      ".oPppppowwwwwwo.",
+      ".opppppowowwowo.",
+      ".opppppokwwwwko.",
+      ".opppppowwoowwo.",
+      "..oppppowwwwwo..",
+      "...oooooooooo...",
+      "................",
+      "................",
+      "................",
+      "................"
+    ]
+  },
+  "star": {
+    "palette": { "o": "#c9953a", "y": "#ffe99a", "Y": "#fff8d6", "k": "#ffb0b0" },
+    "rows": [
+      "................",
+      ".......oo.......",
+      "......oYyo......",
+      "......oYyo......",
+      ".....oYyyyo.....",
+      "oooooYyyyyyooooo",
+      "oYYyyyyyyyyyyyyo",
+      ".oyyyoyyyyoyyyo.",
+      "..oyykyyyykyyo..",
+      "...oyyyooyyyo...",
+      "...oyyyyyyyyo...",
+      "..oyyyyooyyyyo..",
+      "..oyyyo..oyyyo..",
+      ".oyyo......oyyo.",
+      ".ooo........ooo.",
+      "................"
+    ]
+  },
+  "leaf": {
+    "palette": { "o": "#c0704f", "f": "#ffc49e", "F": "#ffe3cc", "k": "#ff9eb0" },
+    "rows": [
+      "................",
+      "................",
+      "..........ooo...",
+      ".....oooooFffo..",
+      "....oFFFfffffo..",
+      "...oFFffffffffo.",
+      "...offffffffffo.",
+      "...offoffffoffo.",
+      "...ofkffffffkfo.",
+      "...offffooffffo.",
+      "...offffffffffo.",
+      "....offffffffo..",
+      "...o.oooooooo...",
+      "..o.............",
+      ".o..............",
+      "................"
+    ]
+  },
+  "moon": {
+    "palette": { "o": "#8a6fb8", "l": "#d9c9f5", "L": "#f1eaff", "k": "#f5b8d8", "z": "#a58fd6" },
+    "rows": [
+      "............zzz.",
+      ".............z..",
+      ".....oooooo.zzz.",
+      "...ooLLlllloo...",
+      "..oLLllllllllo..",
+      ".oLlllllllllllo.",
+      ".ollllllllllllo.",
+      ".olloolllloollo.",
+      ".olkllllllllklo.",
+      ".ollllloolllllo.",
+      ".ollllllllllllo.",
+      "..ollllllllllo..",
+      "...oolllllloo...",
+      ".....oooooo.....",
+      "................",
+      "................"
+    ]
+  },
+  "cloud": {
+    "palette": { "o": "#b9d3e6", "W": "#ffffff", "B": "#e3eef8" },
+    "rows": [
+      ".....oooo.......",
+      "...ooWWWWo.oo...",
+      "..oWWWWWWooWWo..",
+      ".oWWWWWWWWWWWWo.",
+      "oWWWWWWWWWWWWWWo",
+      "oWWWWWWWWWWWWWBo",
+      ".oBBWWWWWWWBBBo.",
+      "..oooooooooooo.."
+    ]
+  }
+}

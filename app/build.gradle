@@ -1,0 +1,27 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = 'app.ritalog.local'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = 'app.ritalog.local'
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 1
+        versionName = '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            // Signed with the debug keystore so updates install over previous versions.
+            signingConfig = signingConfigs.debug
+            minifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}

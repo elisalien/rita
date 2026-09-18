@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rita</string>
+    <string name="widget_name">Rita · ma journée</string>
+    <string name="widget_desc">Un tap pour noter réveil, prise, pic, chute et zéro</string>
+    <string name="share_title">Exporter mes données Rita</string>
+</resources>
