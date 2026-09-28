@@ -6,6 +6,10 @@
   const Native = window.RitaBridge || null;
   const Charts = window.RitaCharts;
 
+  // Shared core for the feature modules (meds.js, crises.js, journal.js). They are loaded
+  // before this file as factories and receive R once everything below is defined.
+  const R = window.Rita = {};
+
   const STEPS = [
     { key: 'wake', label: 'Réveil', noted: 'Réveil noté', sprite: 'sun', hint: 'je me lève', pal: ['#d9a54a', '#ffe08a', '#fff4cf'] },
     { key: 'dose', label: 'Prise', noted: 'Prise notée', sprite: 'pill', hint: 'ritaline avalée', pal: ['#d47c98', '#ffb8cb', '#ffe6ee'] },
@@ -24,12 +28,13 @@
   const MOOD_WORDS = ['', 'très mal', 'pas top', 'bof', 'bien', 'super'];
   const ENERGY_WORDS = ['', 'à plat', 'faible', 'moyenne', 'bonne', 'à fond'];
   const MOOD_MERGE_MIN = 5; // a mood and an energy tapped within 5 min form one entry
-  // Context chips, shared by mood entries (x.tags) and days (d.tags). Keys are stored, labels shown.
+  // Context chips ("raisons possibles"), shared by mood entries (x.tags), days (d.tags) and crises (c.why).
+  // Keys are stored, labels shown. Custom ones live in data.tagsx, hidden ones in data.tagsHide.
   const TAGS = [
     ['fatigue', 'fatigue'], ['sommeil', 'mal dormi'], ['travail', 'travail'], ['stress', 'stress'],
     ['regles', 'règles'], ['douleur', 'douleur'], ['malade', 'malade'], ['social', 'social'], ['faim', 'pas mangé'],
+    ['cafe', 'café'], ['bruit', 'foule/bruit'],
   ];
-  const TAG_LABEL = Object.fromEntries(TAGS);
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -42,9 +47,13 @@
     try {
       const raw = Native ? Native.load() : localStorage.getItem('rita');
       const d = raw ? JSON.parse(raw) : null;
-      if (d && d.days) { if (!d.moods) d.moods = {}; return d; }
+      if (d && d.days) {
+        for (const k of ['moods', 'takes', 'crises']) if (!d[k]) d[k] = {};
+        if (!d.meds) d.meds = [];
+        return d;
+      }
     } catch (e) { /* fresh start */ }
-    return { v: 1, days: {}, moods: {} };
+    return { v: 1, days: {}, moods: {}, meds: [], takes: {}, crises: {} };
   }
 
   function save() {
@@ -75,6 +84,9 @@
   const dateOf = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
   const dateLabel = k => dateOf(k).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
   const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const shiftKey = (k, n) => { const d = dateOf(k); d.setDate(d.getDate() + n); return keyOf(d); };
+  const fmt1 = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
+  const uid = () => Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
 
   // After midnight, taps still belong to yesterday until its "zéro" is logged (until 5h).
   function activeKey() {
@@ -89,13 +101,15 @@
   }
 
   // ---------- stats ----------
-  function stats(limit) {
+  /** Averages over the last `limit` dosed days, optionally only days >= since. */
+  function stats(limit, since) {
     const keys = Object.keys(data.days).sort().reverse();
-    const acc = { rise: [], plateau: [], fall: [], total: [], wait: [], toDrop: [] };
+    const acc = { rise: [], plateau: [], fall: [], total: [], wait: [], toDrop: [], dose: [] };
     let n = 0;
     for (const k of keys) {
       const d = data.days[k];
       if (!d.dose) continue;
+      if (since && k < since) break;
       if (n >= limit) break;
       n++;
       const push = (arr, v) => { if (v != null) arr.push(v); };
@@ -105,6 +119,7 @@
       push(acc.total, span(d.dose, d.zero));
       push(acc.wait, span(d.wake, d.dose));
       push(acc.toDrop, span(d.dose, d.drop));
+      push(acc.dose, toMin(d.dose));
     }
     const out = { n };
     for (const k in acc) out[k] = acc[k].length ? Math.round(avg(acc[k])) : null;
@@ -138,27 +153,6 @@
     return last && span(last.t, nowHM()) <= MOOD_MERGE_MIN ? last : null;
   }
 
-  const tagWords = tags => (tags || []).map(t => TAG_LABEL[t] || t);
-  const chipsHTML = on => TAGS.map(([k, l]) =>
-    `<button class="chip fr ${(on || []).includes(k) ? 'f-zero' : 'f-off'}" data-tag="${k}">${l}</button>`).join('');
-  function toggleTag(obj, tag) {
-    const tags = obj.tags || [];
-    const i = tags.indexOf(tag);
-    if (i >= 0) tags.splice(i, 1); else tags.push(tag);
-    if (tags.length) obj.tags = tags; else delete obj.tags;
-  }
-  /** Chips in a sheet edit a local list; nothing is saved before "ok". */
-  function bindSheetChips(box, sel) {
-    box.querySelectorAll('.chip').forEach(b => {
-      b.onclick = () => {
-        toggleTag(sel, b.dataset.tag);
-        const on = (sel.tags || []).includes(b.dataset.tag);
-        b.classList.toggle('f-zero', on);
-        b.classList.toggle('f-off', !on);
-      };
-    });
-  }
-
   /** Same rule as Store.logMood (Java): complete or correct the open entry, else start a new one. */
   function logMood(kind, v) {
     const k = keyOf(new Date());
@@ -171,7 +165,7 @@
 
   // Which Rita phase a time falls in: 0 avant, 1 montée, 2 plateau, 3 descente, 4 après.
   function phaseOf(d, t) {
-    if (!d.dose) return null;
+    if (!d || !d.dose) return null;
     const m = toMin(t), rel = x => (toMin(x) - toMin(d.dose) + 1440) % 1440;
     if (m < toMin(d.dose) && (!d.wake || m >= toMin(d.wake) - 60)) return 0;
     const r = rel(t);
@@ -181,12 +175,100 @@
     if (!d.zero || r < rel(d.zero)) return 3;
     return 4;
   }
+  const PHASE_WORDS = ['avant la prise', 'pendant la montée', 'au plateau', 'pendant la descente', 'après l\'effet'];
 
   function moodDayAvg(k) {
     const arr = moodsOf(k);
     const m = avg(arr.filter(x => x.m != null).map(x => x.m));
     const e = avg(arr.filter(x => x.e != null).map(x => x.e));
     return { m, e, n: arr.length };
+  }
+
+  // ---------- tags ----------
+  function tagList() {
+    const hide = data.tagsHide || [];
+    return [...TAGS, ...(data.tagsx || [])].filter(([k]) => !hide.includes(k));
+  }
+  function tagLabel(k) {
+    const f = TAGS.find(t => t[0] === k) || (data.tagsx || []).find(t => t[0] === k);
+    return f ? f[1] : k;
+  }
+  const tagWords = tags => (tags || []).map(tagLabel);
+
+  /** Adds a custom tag (or finds the existing one with that label) and returns its key. */
+  function addTag(label) {
+    label = (label || '').trim().replace(/\s+/g, ' ');
+    if (!label) return null;
+    const all = [...TAGS, ...(data.tagsx || [])];
+    const f = all.find(t => t[1].toLowerCase() === label.toLowerCase());
+    if (f) {
+      if (data.tagsHide) data.tagsHide = data.tagsHide.filter(k => k !== f[0]);
+      save();
+      return f[0];
+    }
+    const k = 'x' + uid();
+    (data.tagsx || (data.tagsx = [])).push([k, label]);
+    save();
+    return k;
+  }
+
+  function toggleTag(obj, tag, field) {
+    field = field || 'tags';
+    const tags = obj[field] || [];
+    const i = tags.indexOf(tag);
+    if (i >= 0) tags.splice(i, 1); else tags.push(tag);
+    if (tags.length) obj[field] = tags; else delete obj[field];
+  }
+
+  /**
+   * Fills `box` with toggle chips bound to sel[field]. `list` is [[key, label]]; chips already
+   * selected but missing from the list (hidden tags) still show. With `addable`, a "+ autre" chip
+   * turns into a field that creates a custom tag. `onChange` runs after each toggle.
+   */
+  function chipBox(box, sel, opt) {
+    opt = opt || {};
+    const field = opt.field || 'tags';
+    const list = () => {
+      const base = opt.list ? opt.list() : tagList();
+      const on = sel[field] || [];
+      const extra = on.filter(k => !base.some(t => t[0] === k)).map(k => [k, opt.label ? opt.label(k) : tagLabel(k)]);
+      return [...base, ...extra];
+    };
+    const paint = () => {
+      const on = sel[field] || [];
+      box.innerHTML = list().map(([k, l]) =>
+        `<button class="chip fr ${on.includes(k) ? (opt.cls || 'f-zero') : 'f-off'}" data-tag="${esc(k)}">${esc(l)}</button>`).join('')
+        + (opt.addable === false ? '' : '<button class="chip fr f-off add" data-add="1">+ autre</button>');
+    };
+    box.onclick = e => {
+      const add = e.target.closest('[data-add]');
+      if (add) {
+        const inp = document.createElement('input');
+        inp.className = 'field small chip-in';
+        inp.maxLength = 24;
+        inp.placeholder = 'nouvelle raison';
+        add.replaceWith(inp);
+        inp.focus();
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          const k = addTag(inp.value);
+          if (k && !(sel[field] || []).includes(k)) toggleTag(sel, k, field);
+          paint();
+          if (k && opt.onChange) opt.onChange();
+        };
+        inp.onkeydown = ev => { if (ev.key === 'Enter') inp.blur(); };
+        inp.onblur = finish;
+        return;
+      }
+      const b = e.target.closest('.chip');
+      if (!b || !b.dataset.tag) return;
+      toggleTag(sel, b.dataset.tag, field);
+      paint();
+      if (opt.onChange) opt.onChange();
+    };
+    paint();
   }
 
   // ---------- pixel art ----------
@@ -219,6 +301,13 @@
     return `url("data:image/svg+xml,${encodeURIComponent(svg + '</svg>')}")`;
   }
 
+  // Treatment colors, same order as CAPSULE_COLORS in tools/make_assets.py.
+  const MED_PAL = [
+    ['#6f8fc4', '#a9c4f5', '#dbe7ff'], ['#6fae67', '#b6e3a8', '#e2f6da'], ['#9a84c9', '#d3c4f3', '#f1ebff'],
+    ['#c9a24e', '#ffe08a', '#fff4cf'], ['#d98b62', '#ffc9a3', '#ffeede'], ['#4f9e9a', '#9fdcd5', '#dcf5f2'],
+  ];
+  const CRISIS_PAL = ['#8a6fc0', '#d3c4f3', '#f1ebff'];
+
   function installFrames() {
     const css = [
       `.f-wood{--frame:${frameURI('#a8806c', '#f2cda4', '#fde9cc', '#fffaf0')}}`,
@@ -226,11 +315,14 @@
       `.f-paper{--frame:${frameURI('#b99c8a', '#f5e3cc', '#fffaf0', '#fffaf0')}}`,
       `.f-mood{--frame:${frameURI('#cc6f8c', '#ffb8cb', '#ffe6ee', '#ffe6ee')}}`,
       `.f-energy{--frame:${frameURI('#c9a24e', '#ffe08a', '#fff4cf', '#fff4cf')}}`,
+      `.f-crise{--frame:${frameURI(CRISIS_PAL[0], CRISIS_PAL[1], CRISIS_PAL[2], CRISIS_PAL[2])}}`,
+      `.f-anx{--frame:${frameURI('#c0607a', '#ffb3c1', '#ffe0e7', '#ffe0e7')}}`,
     ];
     for (const s of STEPS) {
       const [D, W, L] = s.pal;
       css.push(`.f-${s.key}{--frame:${frameURI(D, W, L, L)}}`);
     }
+    MED_PAL.forEach(([D, W, L], i) => css.push(`.f-med${i}{--frame:${frameURI(D, W, L, L)}}`));
     const st = document.createElement('style');
     st.textContent = css.join('\n');
     document.head.appendChild(st);
@@ -255,7 +347,18 @@
     return Math.max(0, Math.min(100, (m - T0) / (T1 - T0) * 100));
   }
 
-  function barHTML(d, live) {
+  /** Marks under the bar: other treatments (small squares) and crises (lilac bolts). */
+  function dayMarks(k) {
+    const marks = [];
+    for (const x of data.takes[k] || []) {
+      const med = R.Meds.byId(x.med);
+      if (med) marks.push({ t: x.t, cls: 'mk-med', color: MED_PAL[med.col % MED_PAL.length][0] });
+    }
+    for (const c of data.crises[k] || []) marks.push({ t: c.t, cls: 'mk-crise', color: CRISIS_PAL[0] });
+    return marks;
+  }
+
+  function barHTML(d, live, marks) {
     const ref = d.wake || d.dose;
     let h = `<div class="bar${live ? ' live' : ''}"><div class="track">`;
     for (const [a, b, color] of SEGMENTS) {
@@ -273,7 +376,11 @@
       if (d[s.key]) h += `<div class="tick" style="left:${pos(d[s.key], ref)}%;background:${s.pal[0]}"></div>`;
     }
     if (live) h += `<div class="nowmark" style="left:${pos(nowHM(), ref)}%">&#9829;</div>`;
-    h += '</div><div class="hours">';
+    h += '</div>';
+    if (marks && marks.length) {
+      h += '<div class="marks">' + marks.map(m => `<i class="${m.cls}" style="left:${pos(m.t, ref)}%;background:${m.color}"></i>`).join('') + '</div>';
+    }
+    h += '<div class="hours">';
     for (let t = 6; t <= 22; t += 4) h += `<span style="left:${(t * 60 - T0) / (T1 - T0) * 100}%">${t}h</span>`;
     return h + '</div></div>';
   }
@@ -355,7 +462,8 @@
         <span class="time">${fmtHM(d[s.key])}</span>
       </button>`;
     }).join('');
-    $('#today-bar').innerHTML = barHTML(d, true);
+    R.Meds.renderToday($('#meds'));
+    $('#today-bar').innerHTML = barHTML(d, true, dayMarks(k));
     const bits = [];
     bits.push(d.mg != null ? `dose : ${esc(d.mg)} mg` : 'dose : ? mg');
     if (d.tags && d.tags.length) bits.push(esc(tagWords(d.tags).join(', ')));
@@ -403,13 +511,16 @@
     $('#mood-ctx').hidden = !recent;
     if (recent) {
       $('#mood-ctx-title').textContent = low ? 'qu\'est-ce qui pèse ?' : 'un détail à noter ?';
-      $('#mood-ctx-chips').innerHTML = chipsHTML(recent.tags);
+      chipBox($('#mood-ctx-chips'), recent, { onChange: save });
       $('#mood-ctx-note').textContent = recent.n ? recent.n : '+ écrire un mot';
     }
 
+    R.Crises.renderPanel($('#crisis'));
+
     const d = day(k);
     const entries = arr.map(x => ({ min: toMin(x.t), m: x.m, e: x.e }));
-    Charts.dayMood($('#mood-chart'), entries, phaseBands(d), toMin(nowHM()));
+    const crises = (data.crises[k] || []).map(c => ({ from: toMin(c.t), to: c.end ? toMin(c.end) : null, i: c.i }));
+    Charts.dayMood($('#mood-chart'), entries, phaseBands(d), toMin(nowHM()), crises);
     $('#mood-list').innerHTML = arr.length ? arr.map((x, i) => `
       <button class="mood-item" data-i="${i}">
         <span class="t">${fmtHM(x.t)}</span>
@@ -419,120 +530,10 @@
       </button>`).reverse().join('') : '<div class="empty">Rien encore aujourd\'hui.</div>';
   }
 
-  // ---------- journal ----------
-  function renderJournal() {
-    const st = stats(14);
-    const row = (color, k, sub, v, big) =>
-      `<div class="avg-row${big ? ' big' : ''}">${color ? `<i style="background:${color}"></i>` : '<span>&#9829;</span>'}<span class="k">${k}${sub ? ` <small>${sub}</small>` : ''}</span><span class="v">${fmtDur(v)}</span></div>`;
-    if (!st.n) {
-      $('#averages').innerHTML = '<div class="ptitle">moyennes</div><div class="empty">Pas encore de données.<br>Note ta première journée &#9829;</div>';
-    } else {
-      let h = `<div class="ptitle">moyennes · ${st.n} jour${st.n > 1 ? 's' : ''}</div>`;
-      h += row(null, 'durée totale', '', st.total, true);
-      if (st.totalN > 1) h += `<div class="avg-row"><span class="k" style="color:var(--ink2)">entre ${fmtDur(st.totalMin)} et ${fmtDur(st.totalMax)}</span></div>`;
-      h += row('#ffb8cb', 'montée', 'prise→pic', st.rise);
-      h += row('#bfe6a6', 'plateau', 'pic→chute', st.plateau);
-      h += row('#ffc9a3', 'descente', 'chute→zéro', st.fall);
-      h += row('#efe3d3', 'attente', 'réveil→prise', st.wait);
-      $('#averages').innerHTML = h;
-    }
-    renderCharts(st);
-    renderContext();
-
-    const keys = [...new Set([...Object.keys(data.days), ...Object.keys(data.moods).filter(k => moodsOf(k).length)])].sort().reverse();
-    const today = activeKey();
-    $('#days').innerHTML = keys.map(k => {
-      const d = day(k);
-      const sum = [];
-      if (d.dose && d.peak) sum.push(`pic +${fmtDur(span(d.dose, d.peak))}`);
-      if (d.dose && d.zero) sum.push(`total ${fmtDur(span(d.dose, d.zero))}`);
-      const md = moodDayAvg(k);
-      const moodBit = md.n ? `<span class="day-mood">${md.m != null ? spr('mood' + Math.round(md.m), 1) : ''}${md.e != null ? spr('bat' + Math.round(md.e), 1) : ''}</span>` : '';
-      if (!sum.length) sum.push(STEPS.filter(s => d[s.key]).map(s => s.label).join(', ') || (md.n ? `${md.n} humeur${md.n > 1 ? 's' : ''}` : 'vide'));
-      return `<button class="day fr f-paper" data-day="${k}">
-        <div class="day-head"><span>${dateLabel(k)}${k === today ? ' &#9829;' : ''}</span><span>${d.mg != null ? esc(d.mg) + ' mg' : ''}</span></div>
-        ${barHTML(d, false)}
-        <div class="day-sum">${moodBit}${sum.join(' · ')}</div>
-        ${dayTags(k).length ? `<div class="day-tags">${dayTags(k).map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
-        ${d.note ? `<div class="day-note">${esc(d.note)}</div>` : ''}
-        ${moodsOf(k).filter(x => x.n).map(x => `<div class="day-note">${fmtHM(x.t)} : ${esc(x.n)}</div>`).join('')}
-      </button>`;
-    }).join('');
-  }
-
-  /** Day chips plus the chips of that day's mood entries, without doubles. */
-  function dayTags(k) {
-    const all = [...(day(k).tags || [])];
-    for (const x of moodsOf(k)) for (const t of x.tags || []) if (!all.includes(t)) all.push(t);
-    return tagWords(all);
-  }
-
-  /** Average mood and energy of the entries touched by each chip (own chip, or chip of the day). */
-  function renderContext() {
-    const acc = {};
-    const all = { m: [], e: [] };
-    for (const k of Object.keys(data.moods)) {
-      const dt = day(k).tags || [];
-      for (const x of moodsOf(k)) {
-        if (x.m != null) all.m.push(x.m);
-        if (x.e != null) all.e.push(x.e);
-        for (const t of new Set([...dt, ...(x.tags || [])])) {
-          const a = acc[t] || (acc[t] = { m: [], e: [], n: 0 });
-          a.n++;
-          if (x.m != null) a.m.push(x.m);
-          if (x.e != null) a.e.push(x.e);
-        }
-      }
-    }
-    const keys = Object.keys(acc).sort((a, b) => acc[b].n - acc[a].n);
-    $('#context').hidden = !keys.length;
-    if (!keys.length) return;
-    const face = a => `<span class="day-mood">${a.m.length ? spr('mood' + Math.round(avg(a.m)), 2) : ''}${a.e.length ? spr('bat' + Math.round(avg(a.e)), 2) : ''}</span>`;
-    const line = (label, sub, a) => `<div class="avg-row ctx"><span class="k">${esc(label)} <small>${sub}</small></span>${face(a)}</div>`;
-    $('#context').innerHTML = '<div class="ptitle">humeur selon le contexte</div>'
-      + line('en général', '', all)
-      + keys.map(t => line(TAG_LABEL[t] || t, acc[t].n + ' fois', acc[t])).join('');
-  }
-
-  function renderCharts(st) {
-    const shortLabel = k => String(+k.slice(8));
-    const dosed = Object.keys(data.days).filter(k => data.days[k].dose).sort().slice(-14);
-    const box = (id, show) => { $(id).closest('.panel').hidden = !show; return show; };
-
-    if (box('#chart-dur', dosed.length > 0)) {
-      Charts.durations($('#chart-dur'), dosed.map(k => {
-        const d = data.days[k];
-        return { label: shortLabel(k), rise: span(d.dose, d.peak), plateau: span(d.peak, d.drop), fall: span(d.drop, d.zero), total: span(d.dose, d.zero) };
-      }), PHASE_COLORS);
-    }
-    if (box('#chart-curve', st.rise != null && st.plateau != null && st.fall != null)) {
-      Charts.curve($('#chart-curve'), st, PHASE_COLORS);
-    }
-    const moodKeys = Object.keys(data.moods).filter(k => moodsOf(k).length).sort().slice(-14);
-    if (box('#chart-moods', moodKeys.length > 0)) {
-      Charts.moodDays($('#chart-moods'), moodKeys.map(k => ({ label: shortLabel(k), ...moodDayAvg(k) })));
-    }
-    const groups = [0, 1, 2, 3, 4].map(() => ({ m: [], e: [] }));
-    for (const k of Object.keys(data.moods)) {
-      const d = data.days[k];
-      if (!d) continue;
-      for (const x of moodsOf(k)) {
-        const p = phaseOf(d, x.t);
-        if (p == null) continue;
-        if (x.m != null) groups[p].m.push(x.m);
-        if (x.e != null) groups[p].e.push(x.e);
-      }
-    }
-    const anyPhase = groups.some(g => g.m.length || g.e.length);
-    if (box('#chart-phase', anyPhase)) {
-      Charts.phases($('#chart-phase'), groups.map((g, i) => ({ sprite: ['sun', 'pill', 'star', 'leaf', 'moon'][i], m: avg(g.m), e: avg(g.e) })));
-    }
-  }
-
   function render() {
     if (view === 'today') renderToday();
     else if (view === 'mood') renderMood();
-    else renderJournal();
+    else R.Journal.render();
   }
 
   // ---------- actions ----------
@@ -587,6 +588,7 @@
   function openSheet(html, bind) {
     $('#sheet-box').innerHTML = html;
     $('#sheet').hidden = false;
+    $('#sheet-box').scrollTop = 0;
     bind($('#sheet-box'));
   }
   function closeSheet() { $('#sheet').hidden = true; $('#sheet-box').innerHTML = ''; }
@@ -629,7 +631,7 @@
       <input id="sh-time" class="field" type="time" value="${x.t}">
       <div class="pick-row" data-row="m">${pick('m', 'mood')}</div>
       <div class="pick-row" data-row="e">${pick('e', 'bat')}</div>
-      <div class="chips">${chipsHTML(sel.tags)}</div>
+      <div class="chips" id="sh-chips"></div>
       <input id="sh-note" class="field small" type="text" maxlength="120" placeholder="un mot sur ce moment…" value="${esc(x.n || '')}">
       <div class="sh-row">
         <button id="sh-del" class="btn fr f-off danger">supprimer</button>
@@ -647,7 +649,7 @@
           });
         };
       });
-      bindSheetChips(box, sel);
+      chipBox(box.querySelector('#sh-chips'), sel);
       box.querySelector('#sh-cancel').onclick = closeSheet;
       box.querySelector('#sh-del').onclick = () => {
         moodsOf(k).splice(i, 1);
@@ -675,6 +677,13 @@
     const d = day(k);
     const mg = d.mg != null ? d.mg : (lastMg(k) ?? '');
     const sel = { tags: [...(d.tags || [])] };
+    const takes = (data.takes[k] || []).map(x => ({ ...x }));
+    const crises = data.crises[k] || [];
+    const takesHTML = () => takes.length ? takes.map((x, i) => {
+      const med = R.Meds.byId(x.med);
+      return `<div class="ed-row">${spr('caps' + (med ? med.col : 0), 2)}<span class="lbl wide">${esc(med ? med.name : '?')}${x.dose != null ? ' ' + esc(x.dose) + ' ' + esc(med ? med.unit : '') : ''}</span>
+        <input class="field small" type="time" data-take="${i}" value="${x.t}"><button class="x" data-untake="${i}">x</button></div>`;
+    }).join('') : '';
     openSheet(`
       <div class="sh-title">${spr('pill', 2)}<span>${dateLabel(k)}</span></div>
       ${STEPS.map(s => `
@@ -684,8 +693,11 @@
           <button class="x" data-clear="${s.key}">x</button>
         </div>`).join('')}
       <div class="ed-row"><span class="lbl">dose</span><input id="ed-mg" class="field small" type="number" inputmode="decimal" min="0" step="any" placeholder="mg" value="${esc(mg)}"><span class="x">mg</span></div>
-<div class="ptitle">contexte du jour</div>
-      <div class="chips">${chipsHTML(sel.tags)}</div>
+      ${R.Meds.list().length ? `<div class="ptitle">autres traitements</div><div id="ed-takes">${takesHTML()}</div>
+        <div class="chips" id="ed-addtake">${R.Meds.list().map(m => `<button class="chip fr f-med${m.col}" data-med="${m.id}">+ ${esc(m.name)}</button>`).join('')}</div>` : ''}
+      ${crises.length ? `<div class="ptitle">crises</div>${crises.map((c, i) => `<button class="crisis-item fr f-off" data-crisis="${i}">${spr('anx' + (c.i || 3), 2)}<span>${fmtHM(c.t)}${c.end ? ' · ' + fmtDur(span(c.t, c.end)) : ''}</span></button>`).join('')}` : ''}
+      <div class="ptitle">contexte du jour</div>
+      <div class="chips" id="ed-chips"></div>
       <div class="ed-row"><input id="ed-note" class="field small" type="text" maxlength="120" placeholder="note (sommeil, café, repas…)" value="${esc(d.note || '')}"></div>
       <div class="sh-row">
         <button id="sh-del" class="btn fr f-off danger">supprimer</button>
@@ -695,11 +707,39 @@
       box.querySelectorAll('[data-clear]').forEach(b => {
         b.onclick = () => { box.querySelector(`input[data-k="${b.dataset.clear}"]`).value = ''; };
       });
-      bindSheetChips(box, sel);
+      chipBox(box.querySelector('#ed-chips'), sel);
+      const takeBox = box.querySelector('#ed-takes');
+      const syncTimes = () => box.querySelectorAll('input[data-take]').forEach(inp => { if (inp.value) takes[+inp.dataset.take].t = inp.value; });
+      if (takeBox) {
+        takeBox.onclick = e => {
+          const b = e.target.closest('[data-untake]');
+          if (!b) return;
+          syncTimes();
+          takes.splice(+b.dataset.untake, 1);
+          takeBox.innerHTML = takesHTML();
+        };
+        box.querySelector('#ed-addtake').onclick = e => {
+          const b = e.target.closest('[data-med]');
+          if (!b) return;
+          syncTimes();
+          const med = R.Meds.byId(b.dataset.med);
+          const t = k === keyOf(new Date()) ? nowHM() : (med.times && med.times[0]) || '12:00';
+          const x = { t, med: med.id };
+          if (med.dose != null) x.dose = med.dose;
+          takes.push(x);
+          takeBox.innerHTML = takesHTML();
+        };
+      }
+      box.querySelectorAll('[data-crisis]').forEach(b => {
+        b.onclick = () => R.Crises.openSheet(k, crises[+b.dataset.crisis].id);
+      });
       box.querySelector('#sh-cancel').onclick = closeSheet;
       const del = box.querySelector('#sh-del');
       del.onclick = () => {
-        if (del.dataset.armed) { delete data.days[k]; delete data.moods[k]; save(); closeSheet(); render(); return; }
+        if (del.dataset.armed) {
+          delete data.days[k]; delete data.moods[k]; delete data.takes[k]; delete data.crises[k];
+          save(); closeSheet(); render(); return;
+        }
         del.dataset.armed = '1';
         del.textContent = 'sûr ?';
       };
@@ -712,6 +752,11 @@
         if (note) nd.note = note;
         if (sel.tags && sel.tags.length) nd.tags = sel.tags;
         data.days[k] = nd;
+        if (takeBox) {
+          syncTimes();
+          takes.sort((a, b) => a.t.localeCompare(b.t));
+          if (takes.length) data.takes[k] = takes; else delete data.takes[k];
+        }
         prune(k); save(); closeSheet(); render();
       };
     });
@@ -730,6 +775,30 @@
       box.querySelector('#sh-ok').onclick = () => {
         const v = box.querySelector('#ad-date').value;
         if (v) openDaySheet(v);
+      };
+    });
+  }
+
+  /** Show, hide or delete the context chips. Hidden chips keep their label in the history. */
+  function openTagsSheet() {
+    const hide = new Set(data.tagsHide || []);
+    const all = () => [...TAGS, ...(data.tagsx || [])];
+    const rows = () => all().map(([k, l]) => `<button class="chip fr ${hide.has(k) ? 'f-off hidden-tag' : 'f-zero'}" data-tag="${esc(k)}">${esc(l)}</button>`).join('');
+    openSheet(`
+      <div class="sh-title">${spr('leaf', 2)}<span>Mes raisons</span></div>
+      <div class="sh-sub">Touche une raison pour la cacher ou la remettre. Tu peux en ajouter depuis n'importe quelle liste avec « + autre ».</div>
+      <div class="chips" id="tg-list">${rows()}</div>
+      <div class="sh-row"><button id="sh-ok" class="btn fr f-peak">ok &#9829;</button></div>`, box => {
+      box.querySelector('#tg-list').onclick = e => {
+        const b = e.target.closest('[data-tag]');
+        if (!b) return;
+        const k = b.dataset.tag;
+        if (hide.has(k)) hide.delete(k); else hide.add(k);
+        box.querySelector('#tg-list').innerHTML = rows();
+      };
+      box.querySelector('#sh-ok').onclick = () => {
+        if (hide.size) data.tagsHide = [...hide]; else delete data.tagsHide;
+        save(); closeSheet(); render();
       };
     });
   }
@@ -760,7 +829,16 @@
           const keyOk = k => /^\d{4}-\d\d-\d\d$/.test(k);
           let n = 0;
           for (const k in inc.days) if (keyOk(k)) { data.days[k] = inc.days[k]; n++; }
-          for (const k in (inc.moods || {})) if (keyOk(k) && Array.isArray(inc.moods[k])) data.moods[k] = inc.moods[k];
+          for (const f of ['moods', 'takes', 'crises']) {
+            for (const k in (inc[f] || {})) if (keyOk(k) && Array.isArray(inc[f][k])) data[f][k] = inc[f][k];
+          }
+          for (const m of inc.meds || []) {
+            if (!m || !m.id) continue;
+            const i = data.meds.findIndex(x => x.id === m.id);
+            if (i >= 0) data.meds[i] = m; else data.meds.push(m);
+          }
+          for (const t of inc.tagsx || []) if (!(data.tagsx || []).some(x => x[0] === t[0])) (data.tagsx || (data.tagsx = [])).push(t);
+          if (inc.tagsHide) data.tagsHide = [...new Set([...(data.tagsHide || []), ...inc.tagsHide])];
           save(); closeSheet(); render();
           toast(`${n} jour${n > 1 ? 's' : ''} importé${n > 1 ? 's' : ''} &#9829;`);
         } catch (e) {
@@ -785,6 +863,19 @@
     render();
   }
 
+  // ---------- core for the modules ----------
+  Object.defineProperty(R, 'data', { get: () => data });
+  Object.assign(R, {
+    STEPS, BY, PHASE_COLORS, PHASE_WORDS, MOOD_WORDS, ENERGY_WORDS, MED_PAL, CRISIS_PAL, Charts,
+    $, esc, save, render, day, moodsOf, moodDayAvg, phaseOf, stats, activeKey, phaseBands,
+    pad, nowHM, toMin, span, addMin, fmtHM, fmtDur, keyOf, dateOf, dateLabel, avg, shiftKey, fmt1, uid,
+    tagList, tagLabel, tagWords, chipBox, toggleTag, spr, spriteURL, barHTML, dayMarks,
+    openSheet, closeSheet, toast, hearts, openDaySheet, openAddDay, openTagsSheet, exportData, openImport,
+  });
+  R.Meds = window.RitaMeds(R);
+  R.Crises = window.RitaCrises(R);
+  R.Journal = window.RitaJournal(R);
+
   // ---------- wiring ----------
   installFrames();
   installClouds();
@@ -798,7 +889,7 @@
   });
   $('#view-mood').addEventListener('click', e => {
     const b = e.target.closest('.mood-btn');
-    if (b && !b.closest('.sheet')) {
+    if (b && !b.closest('.sheet') && b.dataset.kind) {
       logMood(b.dataset.kind, +b.dataset.v);
       render();
       const again = document.querySelector(`#view-mood .mood-btn[data-kind="${b.dataset.kind}"][data-v="${b.dataset.v}"]`);
@@ -806,37 +897,36 @@
       return;
     }
     const recent = recentEntry();
-    const chip = e.target.closest('#mood-ctx .chip');
-    if (chip && recent) { toggleTag(recent, chip.dataset.tag); save(); render(); return; }
     if (e.target.closest('#mood-ctx-note') && recent) { openMoodSheet(keyOf(new Date()), moodsOf(keyOf(new Date())).length - 1); return; }
     const item = e.target.closest('.mood-item');
     if (item) openMoodSheet(keyOf(new Date()), +item.dataset.i);
   });
-  $('#days').addEventListener('click', e => {
-    const b = e.target.closest('.day');
-    if (b) openDaySheet(b.dataset.day);
-  });
   $('#today-extra').onclick = () => openDaySheet(activeKey());
-  $('#add-day').onclick = openAddDay;
-  $('#export').onclick = exportData;
-  $('#import').onclick = openImport;
   $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
   document.querySelectorAll('.tab').forEach(t => { t.onclick = () => setView(t.dataset.view); });
 
   // Called by MainActivity.
-  window.ritaRefresh = () => { data = load(); if ($('#sheet').hidden) render(); };
+  window.ritaRefresh = () => { data = load(); if ($('#sheet').hidden && !R.Crises.breathing()) render(); };
   window.ritaOpenStep = key => { setView('today'); if (BY[key]) openStepSheet(activeKey(), key); };
-  window.ritaOpenView = v => { closeSheet(); setView(v === 'mood' ? 'mood' : v === 'journal' ? 'journal' : 'today'); };
+  window.ritaOpenView = v => {
+    closeSheet();
+    if (v === 'crise') { setView('mood'); R.Crises.start(); return; }
+    setView(v === 'mood' ? 'mood' : v === 'journal' ? 'journal' : 'today');
+  };
   window.ritaBack = () => {
+    if (R.Crises.breathing()) { R.Crises.stopBreathing(); return true; }
     if (!$('#sheet').hidden) { closeSheet(); return true; }
     if (view !== 'today') { setView('today'); return true; }
     return false;
   };
 
-  setInterval(() => { if (view !== 'journal' && $('#sheet').hidden) render(); }, 30000);
+  setInterval(() => { if (view !== 'journal' && $('#sheet').hidden && !R.Crises.breathing()) render(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) window.ritaRefresh(); });
-  window.addEventListener('resize', () => { if (view !== 'today') render(); });
-  render();
+  let lastW = window.innerWidth;
+  window.addEventListener('resize', () => { if (window.innerWidth !== lastW && view !== 'today') { lastW = window.innerWidth; render(); } });
+  // Desktop preview: ?view=crise|mood|journal opens that view directly.
+  const qv = new URLSearchParams(location.search).get('view');
+  if (qv && !Native) window.ritaOpenView(qv); else render();
   // Charts draw text with the pixel font; redraw once it is ready.
-  if (document.fonts) document.fonts.load('8px RitaPixel').then(() => render());
+  if (document.fonts) document.fonts.load('8px RitaPixel').then(() => { if ($('#sheet').hidden) render(); });
 })();

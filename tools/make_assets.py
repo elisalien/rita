@@ -280,6 +280,111 @@ def gen_mood_sprites():
             rows += ["....ow" + c * 4 + "wo...."] * 2
         rows += ["....owwwwwwo....", "....oooooooo....", "................"]
         out[f"bat{level}"] = {"palette": {"o": "#8a7080", "w": "#fffaf0", "f": fill}, "rows": rows}
+    out.update(gen_crisis_sprites())
+    out.update(gen_capsules())
+    return out
+
+
+HEART = [
+    "................",
+    "..oooo....oooo..",
+    ".ohhffo..offffo.",
+    "ohhffffooffffffo",
+    "ohfffffffffffffo",
+    "offffffffffffffo",
+    "offffffffffffffo",
+    ".offffffffffffo.",
+    "..offffffffffo..",
+    "...offffffffo...",
+    "....offffffo....",
+    ".....offffo.....",
+    "......offo......",
+    ".......oo.......",
+    "................",
+    "................",
+]
+# anxiety 1..5: a heart that goes from calm lilac to racing red, with shake marks at 4 and 5
+ANXIETY = {
+    1: ("#9a84c9", "#e6dcff", "#f6f1ff"),
+    2: ("#b58aa8", "#ffd6e0", "#fff0f4"),
+    3: ("#c9788f", "#ffb3c1", "#ffe0e7"),
+    4: ("#c0607a", "#ff8a9e", "#ffc7d2"),
+    5: ("#a8445e", "#f0607a", "#ffa8b8"),
+}
+ANX_FACE = {
+    1: [(5, 6), (10, 6), (6, 9), (7, 10), (8, 10), (9, 9)],
+    2: [(5, 6), (10, 6), (6, 9), (7, 9), (8, 9), (9, 9)],
+    3: [(5, 5), (5, 6), (10, 5), (10, 6), (6, 9), (7, 8), (8, 9), (9, 8)],
+    4: [(5, 5), (5, 6), (10, 5), (10, 6), (6, 9), (7, 8), (8, 9), (9, 8), (10, 9)],
+    5: [(4, 5), (5, 6), (11, 5), (10, 6), (6, 9), (7, 8), (8, 9), (9, 8), (10, 9)],
+}
+SHAKE = {4: [(0, 8), (0, 9), (15, 8), (15, 9)],
+         5: [(0, 8), (0, 9), (15, 8), (15, 9), (1, 11), (14, 11), (2, 12), (13, 12)]}
+BOLT = [
+    "................",
+    ".......oooo.....",
+    "......oyyyo.....",
+    ".....oyyyo......",
+    "....oyyyo.......",
+    "...oyyyyoooo....",
+    "..oyYYYYyyyo....",
+    "..ooooyyyyo.....",
+    ".....oyyyo......",
+    "....oyyyo.......",
+    "...oyyo.........",
+    "..oyo...........",
+    "..oo............",
+    "................",
+    "................",
+    "................",
+]
+
+
+def gen_crisis_sprites():
+    out = {"bolt": {"palette": {"o": "#8a6fc0", "y": "#d3c4f3", "Y": "#f1ebff"}, "rows": BOLT}}
+    for level, (o, f, h) in ANXIETY.items():
+        grid = [list(r) for r in HEART]
+        for x, y in ANX_FACE[level]:
+            grid[y][x] = "o"
+        for x, y in SHAKE.get(level, []):
+            grid[y][x] = "m"
+        out[f"anx{level}"] = {"palette": {"o": o, "f": f, "h": h, "m": o}, "rows": ["".join(r) for r in grid]}
+    return out
+
+
+CAPSULE = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "....oooooooo....",
+    "...oAAAAwwwwo...",
+    "..oAaaaawwwwwo..",
+    "..oaaaaawwwwwo..",
+    "..oaaaaawwwwwo..",
+    "..oaaaaawwwwwo..",
+    "...oaaaawwwwo...",
+    "....oooooooo....",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+# one capsule per treatment color (index = med.col in app.js)
+CAPSULE_COLORS = [
+    ("#6f8fc4", "#a9c4f5", "#dbe7ff"),
+    ("#6fae67", "#b6e3a8", "#e2f6da"),
+    ("#9a84c9", "#d3c4f3", "#f1ebff"),
+    ("#c9a24e", "#ffe08a", "#fff4cf"),
+    ("#d98b62", "#ffc9a3", "#ffeede"),
+    ("#4f9e9a", "#9fdcd5", "#dcf5f2"),
+]
+
+
+def gen_capsules():
+    out = {}
+    for i, (o, a, A) in enumerate(CAPSULE_COLORS):
+        out[f"caps{i}"] = {"palette": {"o": o, "a": a, "A": A, "w": "#fffaf0"}, "rows": CAPSULE}
     return out
 
 
@@ -322,6 +427,19 @@ def build_icons(sprites):
         bg.save(os.path.join(folder, "ic_launcher_background.png"))
 
 
+def build_shortcut_icon(sprites):
+    """Launcher shortcut "crise": the lilac bolt on a round pale-lilac badge (drawable-nodpi, 192 px)."""
+    size = 192
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    from PIL import ImageDraw
+    ImageDraw.Draw(img).ellipse((0, 0, size - 1, size - 1), fill=(241, 235, 255, 255))
+    spr = sprite_image(sprites["bolt"], 7)
+    img.paste(spr, ((size - spr.width) // 2 + 4, (size - spr.height) // 2 + 12), spr)
+    folder = os.path.join(RES, "drawable-nodpi")
+    os.makedirs(folder, exist_ok=True)
+    img.save(os.path.join(folder, "ic_shortcut_crise.png"))
+
+
 def main():
     os.makedirs(WWW, exist_ok=True)
     build_font(os.path.join(WWW, "pixel.ttf"))
@@ -330,6 +448,7 @@ def main():
     with open(os.path.join(WWW, "sprites.js"), "w", encoding="utf-8") as f:
         f.write("window.SPRITES=" + json.dumps(sprites, separators=(",", ":")) + ";\n")
     build_icons(sprites)
+    build_shortcut_icon(sprites)
     print("ok:", len(G), "glyphs,", len(sprites), "sprites")
 
 

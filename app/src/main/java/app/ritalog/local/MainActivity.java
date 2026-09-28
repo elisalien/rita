@@ -83,8 +83,7 @@ public class MainActivity extends Activity {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
         }
 
-        pendingStep = getIntent().getStringExtra(RitaWidget.EXTRA_STEP);
-        pendingView = getIntent().getStringExtra(EXTRA_VIEW);
+        readIntent(getIntent());
         web.loadUrl("file:///android_asset/www/index.html");
     }
 
@@ -108,8 +107,7 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        pendingStep = intent.getStringExtra(RitaWidget.EXTRA_STEP);
-        pendingView = intent.getStringExtra(EXTRA_VIEW);
+        readIntent(intent);
         flushPendingStep();
     }
 
@@ -127,6 +125,18 @@ public class MainActivity extends Activity {
         }
         web.destroy();
         super.onDestroy();
+    }
+
+    /**
+     * Takes the widget step or view (e.g. "crise" from the launcher shortcut) once. A launch from
+     * recents replays the old intent, which must not start a second crisis.
+     */
+    private void readIntent(Intent intent) {
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return;
+        pendingStep = intent.getStringExtra(RitaWidget.EXTRA_STEP);
+        pendingView = intent.getStringExtra(EXTRA_VIEW);
+        intent.removeExtra(RitaWidget.EXTRA_STEP);
+        intent.removeExtra(EXTRA_VIEW);
     }
 
     private void flushPendingStep() {

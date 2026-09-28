@@ -25,6 +25,7 @@
         <div id="status" class="dialog fr f-wood"></div>
       </div>
       <div id="steps" class="steps"></div>
+      <div id="meds" class="meds"></div>
       <div class="panel fr f-wood">
         <div class="ptitle">ma journée</div>
         <div id="today-bar"></div>
@@ -42,6 +43,7 @@
         <div class="nametag fr f-mood">&#9829; humeur</div>
         <div id="mood-status" class="dialog fr f-wood"></div>
       </div>
+      <div id="crisis" class="crisis"></div>
       <div class="panel fr f-wood pick">
         <div class="ptitle">humeur</div>
         <div id="mood-row" class="pick-row"></div>
@@ -60,51 +62,16 @@
           <span><i style="background:#e0668c"></i>humeur</span>
           <span><i style="background:#d99a1e"></i>énergie</span>
           <span><i style="background:#ffe6ee"></i>ritaline</span>
+          <span><i style="background:#d3c4f3"></i>crise</span>
         </div>
       </div>
       <div id="mood-list" class="mood-list"></div>
     </section>
 
     <section id="view-journal" hidden>
-      <div id="averages" class="panel fr f-wood"></div>
-      <div class="panel fr f-wood">
-        <div class="ptitle">durée d'effet par jour</div>
-        <div id="chart-dur" class="chart-box"></div>
-        <div class="legend">
-          <span><i style="background:#ffb8cb"></i>montée</span>
-          <span><i style="background:#bfe6a6"></i>plateau</span>
-          <span><i style="background:#ffc9a3"></i>descente</span>
-        </div>
-      </div>
-      <div class="panel fr f-wood">
-        <div class="ptitle">ta courbe type</div>
-        <div id="chart-curve" class="chart-box"></div>
-      </div>
-      <div class="panel fr f-wood">
-        <div class="ptitle">humeur et énergie par jour</div>
-        <div id="chart-moods" class="chart-box"></div>
-        <div class="legend">
-          <span><i style="background:#e0668c"></i>humeur</span>
-          <span><i style="background:#d99a1e"></i>énergie</span>
-        </div>
-      </div>
-      <div class="panel fr f-wood">
-        <div class="ptitle">humeur selon la phase</div>
-        <div id="chart-phase" class="chart-box"></div>
-        <div class="legend">
-          <span><i style="background:#e0668c"></i>humeur</span>
-          <span><i style="background:#d99a1e"></i>énergie</span>
-        </div>
-      </div>
-      <div id="context" class="panel fr f-wood" hidden></div>
-      <div class="ptitle days-title">tous les jours</div>
-      <div id="days" class="days"></div>
-      <div class="row">
-        <button id="add-day" class="btn fr f-peak">+ un jour</button>
-        <button id="export" class="btn fr f-off">exporter</button>
-        <button id="import" class="btn fr f-off">importer</button>
-      </div>
-      <p class="fine">Tes données restent sur ton téléphone. Rien n'est envoyé nulle part.</p>
+      <div id="jtabs" class="subtabs"></div>
+      <div id="jperiod" class="period"></div>
+      <div id="jbody"></div>
     </section>
   </main>
 
@@ -119,12 +86,17 @@
     <button id="toast-undo" class="btn small fr f-dose">annuler</button>
   </div>
 
+  <div id="breath" class="breath" hidden></div>
+
   <div id="sheet" class="sheet" hidden>
     <div id="sheet-box" class="sheet-box fr f-wood"></div>
   </div>
 </div>
 <script src="sprites.js"></script>
 <script src="charts.js"></script>
+<script src="meds.js"></script>
+<script src="crises.js"></script>
+<script src="journal.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="crise"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_crise"
+        android:shortcutShortLabel="@string/shortcut_crise"
+        android:shortcutLongLabel="@string/shortcut_crise_long">
+        <intent
+            android:action="app.ritalog.local.OPEN.crise"
+            android:targetPackage="app.ritalog.local"
+            android:targetClass="app.ritalog.local.MainActivity">
+            <extra android:name="view" android:value="crise" />
+        </intent>
+    </shortcut>
+</shortcuts>
