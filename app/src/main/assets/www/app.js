@@ -24,6 +24,12 @@
   const MOOD_WORDS = ['', 'très mal', 'pas top', 'bof', 'bien', 'super'];
   const ENERGY_WORDS = ['', 'à plat', 'faible', 'moyenne', 'bonne', 'à fond'];
   const MOOD_MERGE_MIN = 5; // a mood and an energy tapped within 5 min form one entry
+  // Context chips, shared by mood entries (x.tags) and days (d.tags). Keys are stored, labels shown.
+  const TAGS = [
+    ['fatigue', 'fatigue'], ['sommeil', 'mal dormi'], ['travail', 'travail'], ['stress', 'stress'],
+    ['regles', 'règles'], ['douleur', 'douleur'], ['malade', 'malade'], ['social', 'social'], ['faim', 'pas mangé'],
+  ];
+  const TAG_LABEL = Object.fromEntries(TAGS);
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -54,7 +60,7 @@
 
   function prune(key) {
     const d = data.days[key];
-    if (d && !STEPS.some(s => d[s.key]) && d.mg == null && !d.note) delete data.days[key];
+    if (d && !STEPS.some(s => d[s.key]) && d.mg == null && !d.note && !(d.tags && d.tags.length)) delete data.days[key];
   }
 
   // ---------- time ----------
@@ -123,6 +129,34 @@
     const last = arr[arr.length - 1];
     if (!last || span(last.t, nowHM()) > MOOD_MERGE_MIN) return null;
     return (last.m == null || last.e == null) ? last : null;
+  }
+
+  /** The entry just tapped (less than 5 min ago), complete or not: details can still be added inline. */
+  function recentEntry() {
+    const arr = moodsOf(keyOf(new Date()));
+    const last = arr[arr.length - 1];
+    return last && span(last.t, nowHM()) <= MOOD_MERGE_MIN ? last : null;
+  }
+
+  const tagWords = tags => (tags || []).map(t => TAG_LABEL[t] || t);
+  const chipsHTML = on => TAGS.map(([k, l]) =>
+    `<button class="chip fr ${(on || []).includes(k) ? 'f-zero' : 'f-off'}" data-tag="${k}">${l}</button>`).join('');
+  function toggleTag(obj, tag) {
+    const tags = obj.tags || [];
+    const i = tags.indexOf(tag);
+    if (i >= 0) tags.splice(i, 1); else tags.push(tag);
+    if (tags.length) obj.tags = tags; else delete obj.tags;
+  }
+  /** Chips in a sheet edit a local list; nothing is saved before "ok". */
+  function bindSheetChips(box, sel) {
+    box.querySelectorAll('.chip').forEach(b => {
+      b.onclick = () => {
+        toggleTag(sel, b.dataset.tag);
+        const on = (sel.tags || []).includes(b.dataset.tag);
+        b.classList.toggle('f-zero', on);
+        b.classList.toggle('f-off', !on);
+      };
+    });
   }
 
   /** Same rule as Store.logMood (Java): complete or correct the open entry, else start a new one. */
@@ -285,7 +319,7 @@
 
   function stepHint(s, d, st) {
     if (d[s.key]) {
-      if (s.key === 'dose' && d.wake) return `${fmtDur(span(d.wake, d.dose))} après le réveil`;
+      if (s.key === 'dose' && d.wake) return `attente : ${fmtDur(span(d.wake, d.dose))}`;
       if (s.key === 'peak' && d.dose) return `montée : ${fmtDur(span(d.dose, d.peak))}`;
       if (s.key === 'drop' && d.peak) return `plateau : ${fmtDur(span(d.peak, d.drop))}`;
       if (s.key === 'zero' && d.dose) return `total : ${fmtDur(span(d.dose, d.zero))}`;
@@ -324,7 +358,8 @@
     $('#today-bar').innerHTML = barHTML(d, true);
     const bits = [];
     bits.push(d.mg != null ? `dose : ${esc(d.mg)} mg` : 'dose : ? mg');
-    bits.push(d.note ? esc(d.note) : 'ajouter une note');
+    if (d.tags && d.tags.length) bits.push(esc(tagWords(d.tags).join(', ')));
+    bits.push(d.note ? esc(d.note) : 'ajouter un détail');
     $('#today-extra').innerHTML = bits.join(' · ');
   }
 
@@ -346,9 +381,12 @@
     const k = keyOf(new Date());
     renderHeader(activeKey(), day(activeKey()));
     const open = openEntry();
+    const recent = recentEntry();
+    const low = recent && recent.m != null && recent.m <= 2;
     const arr = moodsOf(k);
     let msg;
-    if (open && open.e == null) msg = `Humeur notée : ${MOOD_WORDS[open.m]}.<br><span class="soft">Et ton énergie ?</span>`;
+    if (low && !open) msg = 'Aïe, courage &#9829;<br><span class="soft">Note ce qui pèse juste en dessous, si tu veux.</span>';
+    else if (open && open.e == null) msg = `Humeur notée : ${MOOD_WORDS[open.m]}.<br><span class="soft">Et ton énergie ?</span>`;
     else if (open && open.m == null) msg = `Énergie notée : ${ENERGY_WORDS[open.e]}.<br><span class="soft">Et ton humeur ?</span>`;
     else if (arr.length) {
       const last = arr[arr.length - 1];
@@ -362,6 +400,13 @@
     $('#mood-row').innerHTML = row('m', 'mood', MOOD_WORDS, 'f-mood');
     $('#energy-row').innerHTML = row('e', 'bat', ENERGY_WORDS, 'f-energy');
 
+    $('#mood-ctx').hidden = !recent;
+    if (recent) {
+      $('#mood-ctx-title').textContent = low ? 'qu\'est-ce qui pèse ?' : 'un détail à noter ?';
+      $('#mood-ctx-chips').innerHTML = chipsHTML(recent.tags);
+      $('#mood-ctx-note').textContent = recent.n ? recent.n : '+ écrire un mot';
+    }
+
     const d = day(k);
     const entries = arr.map(x => ({ min: toMin(x.t), m: x.m, e: x.e }));
     Charts.dayMood($('#mood-chart'), entries, phaseBands(d), toMin(nowHM()));
@@ -370,7 +415,7 @@
         <span class="t">${fmtHM(x.t)}</span>
         ${x.m != null ? spr('mood' + x.m, 2) : '<span class="nil"></span>'}
         ${x.e != null ? spr('bat' + x.e, 2) : '<span class="nil"></span>'}
-        <span class="w">${[x.m != null ? MOOD_WORDS[x.m] : null, x.e != null ? 'énergie ' + ENERGY_WORDS[x.e] : null].filter(Boolean).join(' · ')}</span>
+        <span class="w">${esc([x.m != null ? MOOD_WORDS[x.m] : null, x.e != null ? 'énergie ' + ENERGY_WORDS[x.e] : null, ...tagWords(x.tags), x.n].filter(Boolean).join(' · '))}</span>
       </button>`).reverse().join('') : '<div class="empty">Rien encore aujourd\'hui.</div>';
   }
 
@@ -392,6 +437,7 @@
       $('#averages').innerHTML = h;
     }
     renderCharts(st);
+    renderContext();
 
     const keys = [...new Set([...Object.keys(data.days), ...Object.keys(data.moods).filter(k => moodsOf(k).length)])].sort().reverse();
     const today = activeKey();
@@ -407,9 +453,45 @@
         <div class="day-head"><span>${dateLabel(k)}${k === today ? ' &#9829;' : ''}</span><span>${d.mg != null ? esc(d.mg) + ' mg' : ''}</span></div>
         ${barHTML(d, false)}
         <div class="day-sum">${moodBit}${sum.join(' · ')}</div>
+        ${dayTags(k).length ? `<div class="day-tags">${dayTags(k).map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
         ${d.note ? `<div class="day-note">${esc(d.note)}</div>` : ''}
+        ${moodsOf(k).filter(x => x.n).map(x => `<div class="day-note">${fmtHM(x.t)} : ${esc(x.n)}</div>`).join('')}
       </button>`;
     }).join('');
+  }
+
+  /** Day chips plus the chips of that day's mood entries, without doubles. */
+  function dayTags(k) {
+    const all = [...(day(k).tags || [])];
+    for (const x of moodsOf(k)) for (const t of x.tags || []) if (!all.includes(t)) all.push(t);
+    return tagWords(all);
+  }
+
+  /** Average mood and energy of the entries touched by each chip (own chip, or chip of the day). */
+  function renderContext() {
+    const acc = {};
+    const all = { m: [], e: [] };
+    for (const k of Object.keys(data.moods)) {
+      const dt = day(k).tags || [];
+      for (const x of moodsOf(k)) {
+        if (x.m != null) all.m.push(x.m);
+        if (x.e != null) all.e.push(x.e);
+        for (const t of new Set([...dt, ...(x.tags || [])])) {
+          const a = acc[t] || (acc[t] = { m: [], e: [], n: 0 });
+          a.n++;
+          if (x.m != null) a.m.push(x.m);
+          if (x.e != null) a.e.push(x.e);
+        }
+      }
+    }
+    const keys = Object.keys(acc).sort((a, b) => acc[b].n - acc[a].n);
+    $('#context').hidden = !keys.length;
+    if (!keys.length) return;
+    const face = a => `<span class="day-mood">${a.m.length ? spr('mood' + Math.round(avg(a.m)), 2) : ''}${a.e.length ? spr('bat' + Math.round(avg(a.e)), 2) : ''}</span>`;
+    const line = (label, sub, a) => `<div class="avg-row ctx"><span class="k">${esc(label)} <small>${sub}</small></span>${face(a)}</div>`;
+    $('#context').innerHTML = '<div class="ptitle">humeur selon le contexte</div>'
+      + line('en général', '', all)
+      + keys.map(t => line(TAG_LABEL[t] || t, acc[t].n + ' fois', acc[t])).join('');
   }
 
   function renderCharts(st) {
@@ -538,7 +620,7 @@
   function openMoodSheet(k, i) {
     const x = moodsOf(k)[i];
     if (!x) return;
-    const sel = { m: x.m, e: x.e };
+    const sel = { m: x.m, e: x.e, tags: [...(x.tags || [])] };
     const pick = (kind, prefix) => [1, 2, 3, 4, 5].map(v =>
       `<button class="mood-btn small fr ${sel[kind] === v ? (kind === 'm' ? 'f-mood' : 'f-energy') : 'f-off'}" data-kind="${kind}" data-v="${v}">${spr(prefix + v, 2)}</button>`).join('');
     openSheet(`
@@ -547,6 +629,8 @@
       <input id="sh-time" class="field" type="time" value="${x.t}">
       <div class="pick-row" data-row="m">${pick('m', 'mood')}</div>
       <div class="pick-row" data-row="e">${pick('e', 'bat')}</div>
+      <div class="chips">${chipsHTML(sel.tags)}</div>
+      <input id="sh-note" class="field small" type="text" maxlength="120" placeholder="un mot sur ce moment…" value="${esc(x.n || '')}">
       <div class="sh-row">
         <button id="sh-del" class="btn fr f-off danger">supprimer</button>
         <button id="sh-cancel" class="btn fr f-off">annuler</button>
@@ -563,6 +647,7 @@
           });
         };
       });
+      bindSheetChips(box, sel);
       box.querySelector('#sh-cancel').onclick = closeSheet;
       box.querySelector('#sh-del').onclick = () => {
         moodsOf(k).splice(i, 1);
@@ -574,6 +659,9 @@
         const next = { t };
         if (sel.m != null) next.m = sel.m;
         if (sel.e != null) next.e = sel.e;
+        if (sel.tags && sel.tags.length) next.tags = sel.tags;
+        const note = box.querySelector('#sh-note').value.trim();
+        if (note) next.n = note;
         const arr = moodsOf(k);
         if (next.m == null && next.e == null) arr.splice(i, 1); else arr[i] = next;
         arr.sort((a, b) => a.t.localeCompare(b.t));
@@ -586,6 +674,7 @@
   function openDaySheet(k) {
     const d = day(k);
     const mg = d.mg != null ? d.mg : (lastMg(k) ?? '');
+    const sel = { tags: [...(d.tags || [])] };
     openSheet(`
       <div class="sh-title">${spr('pill', 2)}<span>${dateLabel(k)}</span></div>
       ${STEPS.map(s => `
@@ -595,6 +684,8 @@
           <button class="x" data-clear="${s.key}">x</button>
         </div>`).join('')}
       <div class="ed-row"><span class="lbl">dose</span><input id="ed-mg" class="field small" type="number" inputmode="decimal" min="0" step="any" placeholder="mg" value="${esc(mg)}"><span class="x">mg</span></div>
+<div class="ptitle">contexte du jour</div>
+      <div class="chips">${chipsHTML(sel.tags)}</div>
       <div class="ed-row"><input id="ed-note" class="field small" type="text" maxlength="120" placeholder="note (sommeil, café, repas…)" value="${esc(d.note || '')}"></div>
       <div class="sh-row">
         <button id="sh-del" class="btn fr f-off danger">supprimer</button>
@@ -604,6 +695,7 @@
       box.querySelectorAll('[data-clear]').forEach(b => {
         b.onclick = () => { box.querySelector(`input[data-k="${b.dataset.clear}"]`).value = ''; };
       });
+      bindSheetChips(box, sel);
       box.querySelector('#sh-cancel').onclick = closeSheet;
       const del = box.querySelector('#sh-del');
       del.onclick = () => {
@@ -618,6 +710,7 @@
         if (mgv !== '' && !isNaN(+mgv)) nd.mg = +mgv;
         const note = box.querySelector('#ed-note').value.trim();
         if (note) nd.note = note;
+        if (sel.tags && sel.tags.length) nd.tags = sel.tags;
         data.days[k] = nd;
         prune(k); save(); closeSheet(); render();
       };
@@ -712,6 +805,10 @@
       if (again) { again.classList.add('pop'); hearts(again); }
       return;
     }
+    const recent = recentEntry();
+    const chip = e.target.closest('#mood-ctx .chip');
+    if (chip && recent) { toggleTag(recent, chip.dataset.tag); save(); render(); return; }
+    if (e.target.closest('#mood-ctx-note') && recent) { openMoodSheet(keyOf(new Date()), moodsOf(keyOf(new Date())).length - 1); return; }
     const item = e.target.closest('.mood-item');
     if (item) openMoodSheet(keyOf(new Date()), +item.dataset.i);
   });
