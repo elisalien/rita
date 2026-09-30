@@ -108,6 +108,7 @@ def main():
     img.save(OUT)
     print("wrote", OUT, (W, H), "u =", u)
     mood_preview(sprites)
+    med_preview(sprites)
 
 
 def paste_sprite(img, spr, x, y, s):
@@ -152,6 +153,28 @@ def mood_preview(sprites, W=840, H=440):
             s = max(1, min((cw - 6 * u) // sw, (ch - 6 * u) // sh))
             paste_sprite(img, spr, x0 + (cw - sw * s) // 2, y0 + (ch - sh * s) // 2, s)
     out = os.path.join(os.path.dirname(OUT), "mood_widget_preview.png")
+    img.save(out)
+    print("wrote", out, (W, H), "u =", u)
+
+
+def med_preview(sprites, W=240, H=240):
+    """Mirrors MedRenderer.java: a treatment taken this morning (blue capsule)."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.fontmode = "1"
+    u = max(1, min(W, H) // 64)
+    font = ImageFont.truetype(os.path.join(WWW, "pixel.ttf"), 8 * u)
+    pal = ["#6f8fc4", "#a9c4f5", "#dbe7ff"]
+    frame(d, 0, 0, W, H, u, pal[0], pal[1], pal[2], pal[2])
+    top_base, bot_base = 12 * u, H - 6 * u
+    for s, base, color in (("Sertraline", top_base, INK), ("pris 8h30", bot_base, INK)):
+        text(d, font, s, (W - (d.textlength(s, font=font) - u)) / 2, base, u, color)
+    spr = sprites["caps0"]
+    band_top, band_bot = top_base + 3 * u, bot_base - 10 * u
+    s = max(1, min((W - 12 * u) // 16, (band_bot - band_top) // 8))
+    cy = (band_top + band_bot) // 2
+    paste_sprite(img, spr, (W - 16 * s) // 2, cy - 8 * s, s)
+    out = os.path.join(os.path.dirname(OUT), "med_widget_preview.png")
     img.save(out)
     print("wrote", out, (W, H), "u =", u)
 

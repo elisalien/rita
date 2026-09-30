@@ -212,6 +212,75 @@ final class Store {
         }
     }
 
+    // ---------- other treatments: {"meds":[{"id","name","dose","unit","col","mode","times"}],
+    // "takes":{"2026-09-28":[{"t":"08:30","med":"m…","dose":50}]}} (see assets/www/meds.js) ----------
+
+    static JSONObject med(JSONObject data, String id) {
+        JSONArray meds = data.optJSONArray("meds");
+        if (meds == null || id == null) return null;
+        for (int i = 0; i < meds.length(); i++) {
+            JSONObject m = meds.optJSONObject(i);
+            if (m != null && id.equals(m.optString("id"))) return m;
+        }
+        return null;
+    }
+
+    /** Treatments taken on a fixed schedule ("tous les jours"), not archived. */
+    static List<JSONObject> dailyMeds(JSONObject data) {
+        List<JSONObject> out = new ArrayList<>();
+        JSONArray meds = data.optJSONArray("meds");
+        if (meds == null) return out;
+        for (int i = 0; i < meds.length(); i++) {
+            JSONObject m = meds.optJSONObject(i);
+            if (m != null && !m.optBoolean("arch") && !"prn".equals(m.optString("mode"))) out.add(m);
+        }
+        return out;
+    }
+
+    /** Times ("08:30") of today's takes of `id`, in order. Takes follow the calendar day, like meds.js. */
+    static List<String> takesToday(JSONObject data, String id) {
+        List<String> out = new ArrayList<>();
+        JSONObject all = data.optJSONObject("takes");
+        JSONArray arr = all == null ? null : all.optJSONArray(keyOf(Calendar.getInstance()));
+        if (arr == null) return out;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject x = arr.optJSONObject(i);
+            if (x != null && id.equals(x.optString("med"))) out.add(x.optString("t"));
+        }
+        return out;
+    }
+
+    /** Doses expected per day: one per planned time, at least one. */
+    static int dosesPerDay(JSONObject med) {
+        JSONArray times = med.optJSONArray("times");
+        return Math.max(1, times == null ? 0 : times.length());
+    }
+
+    /** Logs a take of `id` now, like a tap in the rita tab. */
+    static synchronized boolean logTake(Context c, String id) {
+        JSONObject data = load(c);
+        JSONObject med = med(data, id);
+        if (med == null) return false;
+        try {
+            if (!data.has("takes")) data.put("takes", new JSONObject());
+            JSONObject all = data.getJSONObject("takes");
+            String k = keyOf(Calendar.getInstance());
+            JSONArray arr = all.optJSONArray(k);
+            if (arr == null) arr = new JSONArray();
+            List<JSONObject> list = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) if (arr.optJSONObject(i) != null) list.add(arr.optJSONObject(i));
+            JSONObject x = new JSONObject().put("t", nowHM()).put("med", id);
+            if (med.has("dose")) x.put("dose", med.opt("dose"));
+            list.add(x);
+            Collections.sort(list, (a, b) -> a.optString("t").compareTo(b.optString("t")));
+            all.put(k, new JSONArray(list));
+            saveRaw(c, data.toString());
+            return true;
+        } catch (JSONException e) {
+            return false;
+        }
+    }
+
     static String get(JSONObject d, String step) {
         return d.has(step) ? d.optString(step, null) : null;
     }

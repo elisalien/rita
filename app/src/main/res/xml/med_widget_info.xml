@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:maxResizeWidth="200dp"
+    android:maxResizeHeight="200dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:configure="app.ritalog.local.MedConfigActivity"
+    android:widgetFeatures="reconfigurable"
+    android:initialLayout="@layout/widget_med"
+    android:previewImage="@drawable/med_widget_preview"
+    android:description="@string/med_widget_desc" />
