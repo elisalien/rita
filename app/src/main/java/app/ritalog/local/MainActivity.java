@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
         }
 
         readIntent(getIntent());
+        Reminder.schedule(this);
         web.loadUrl("file:///android_asset/www/index.html");
     }
 
@@ -177,6 +178,22 @@ public class MainActivity extends Activity {
         public void save(String json) {
             Store.saveRaw(MainActivity.this, json);
             RitaWidget.updateAll(getApplicationContext());
+            Reminder.schedule(getApplicationContext());
+        }
+
+        /** Asks once for the notification permission (Android 13+), for the midday reminder. */
+        @JavascriptInterface
+        public void askNotifications() {
+            if (Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                runOnUiThread(() -> requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 7));
+            }
+        }
+
+        /** Shows the reminder right now if something is pending (button "tester" in the app). */
+        @JavascriptInterface
+        public void testReminder() {
+            Reminder.remindIfNeeded(getApplicationContext());
         }
 
         @JavascriptInterface

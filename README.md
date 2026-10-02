@@ -12,7 +12,7 @@ Petit carnet Android pour suivre sa Ritaline et son humeur au quotidien, en pixe
 ## Ce que ça fait
 
 - **Rita** : 5 étapes par jour (réveil, prise, pic, chute, zéro effet). Un tap note l'heure, un autre la corrige.
-- **Autres traitements** : ajoute tes médicaments (tous les jours ou si besoin), un tap note la prise.
+- **Autres traitements** : ajoute tes médicaments (tous les jours ou si besoin), un tap note la prise. Rappel en milieu de journée (13h par défaut) si un médicament n'est pas encore noté.
 - **Humeur** : 5 têtes pour l'humeur, 5 piles pour l'énergie, autant de fois que tu veux dans la journée, avec des raisons possibles (tu peux ajouter les tiennes).
 - **Crises d'angoisse** : un tap note le début, puis intensité de 1 à 5, symptômes, raisons possibles et ce qui a aidé. Un écran « respirer » (5 s / 5 s) et un raccourci « Crise » sur l'icône (appui long).
 - **Trois widgets** pour l'écran d'accueil : ma journée, humeur, et un petit carré par traitement à toucher une fois le médicament pris. Un tap enregistre, sans ouvrir l'app.

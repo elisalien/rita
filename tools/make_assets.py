@@ -440,6 +440,17 @@ def build_shortcut_icon(sprites):
     img.save(os.path.join(folder, "ic_shortcut_crise.png"))
 
 
+def build_notif_icon(sprites):
+    """Status-bar icon: the pill as a white silhouette (Android tints it), 96 px in drawable-nodpi."""
+    spr = sprite_image(sprites["pill"], 6)
+    alpha = spr.getchannel("A")
+    white = Image.new("RGBA", spr.size, (255, 255, 255, 255))
+    white.putalpha(alpha)
+    folder = os.path.join(RES, "drawable-nodpi")
+    os.makedirs(folder, exist_ok=True)
+    white.save(os.path.join(folder, "ic_notif.png"))
+
+
 def main():
     os.makedirs(WWW, exist_ok=True)
     build_font(os.path.join(WWW, "pixel.ttf"))
@@ -449,6 +460,7 @@ def main():
         f.write("window.SPRITES=" + json.dumps(sprites, separators=(",", ":")) + ";\n")
     build_icons(sprites)
     build_shortcut_icon(sprites)
+    build_notif_icon(sprites)
     print("ok:", len(G), "glyphs,", len(sprites), "sprites")
 
 

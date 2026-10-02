@@ -257,7 +257,12 @@ final class Store {
     }
 
     /** Logs a take of `id` now, like a tap in the rita tab. */
-    static synchronized boolean logTake(Context c, String id) {
+    static boolean logTake(Context c, String id) {
+        return logTake(c, id, nowHM());
+    }
+
+    /** Logs a take of `id` at `hm` today. */
+    static synchronized boolean logTake(Context c, String id, String hm) {
         JSONObject data = load(c);
         JSONObject med = med(data, id);
         if (med == null) return false;
@@ -269,7 +274,7 @@ final class Store {
             if (arr == null) arr = new JSONArray();
             List<JSONObject> list = new ArrayList<>();
             for (int i = 0; i < arr.length(); i++) if (arr.optJSONObject(i) != null) list.add(arr.optJSONObject(i));
-            JSONObject x = new JSONObject().put("t", nowHM()).put("med", id);
+            JSONObject x = new JSONObject().put("t", hm).put("med", id);
             if (med.has("dose")) x.put("dose", med.opt("dose"));
             list.add(x);
             Collections.sort(list, (a, b) -> a.optString("t").compareTo(b.optString("t")));
@@ -279,6 +284,27 @@ final class Store {
         } catch (JSONException e) {
             return false;
         }
+    }
+
+    /** Takes expected by now: planned times already passed, or one if no time is planned. */
+    static int dosesDueNow(JSONObject med) {
+        JSONArray times = med.optJSONArray("times");
+        if (times == null || times.length() == 0) return 1;
+        int now = toMin(nowHM()), n = 0;
+        for (int i = 0; i < times.length(); i++) if (toMin(times.optString(i, "00:00")) <= now) n++;
+        return n;
+    }
+
+    /** Midday reminder settings: {"remind":{"on":true,"t":"13:00"}}, on at 13:00 by default. */
+    static boolean remindOn(JSONObject data) {
+        JSONObject r = data.optJSONObject("remind");
+        return r == null || r.optBoolean("on", true);
+    }
+
+    static String remindTime(JSONObject data) {
+        JSONObject r = data.optJSONObject("remind");
+        String t = r == null ? null : r.optString("t", null);
+        return t != null && t.matches("\\d\\d:\\d\\d") ? t : "13:00";
     }
 
     static String get(JSONObject d, String step) {

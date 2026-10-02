@@ -91,13 +91,54 @@ window.RitaMeds = function (R) {
       <div class="sh-sub">En plus de la Ritaline. Un tap sur un traitement dans l'onglet rita note la prise.</div>
       <div class="med-list">${meds.filter(m => !m.arch).map(row).join('') || '<div class="empty">Aucun pour l\'instant.</div>'}</div>
       ${meds.some(m => m.arch) ? `<div class="ptitle">archivés</div><div class="med-list">${meds.filter(m => m.arch).map(row).join('')}</div>` : ''}
+      ${list().some(m => m.mode !== 'prn') ? `<div class="ptitle">rappel</div>
+        <div class="remind">
+          <button class="chip fr ${remind().on ? 'f-zero' : 'f-off'}" id="rm-on">${remind().on ? 'rappel activé' : 'rappel coupé'}</button>
+          <span class="soft">à</span><input id="rm-t" class="field small" type="time" value="${remind().t}">
+        </div>
+        <div class="sh-sub tight">Une notification si un traitement « tous les jours » n'est pas encore noté à cette heure-là.</div>
+        ${window.RitaBridge ? '<button class="plink" id="rm-test">tester maintenant</button>' : ''}` : ''}
       <div class="sh-row">
         <button id="sh-cancel" class="btn fr f-off">fermer</button>
         <button id="sh-new" class="btn fr f-peak">+ nouveau</button>
       </div>`, box => {
       box.querySelectorAll('[data-edit]').forEach(b => { b.onclick = () => openEdit(byId(b.dataset.edit)); });
+      const on = box.querySelector('#rm-on');
+      if (on) {
+        on.onclick = () => {
+          const r = remind();
+          setRemind(!r.on, r.t);
+          on.textContent = !r.on ? 'rappel activé' : 'rappel coupé';
+          on.classList.toggle('f-zero', !r.on);
+          on.classList.toggle('f-off', r.on);
+        };
+        box.querySelector('#rm-t').onchange = e => { if (e.target.value) setRemind(remind().on, e.target.value); };
+        const test = box.querySelector('#rm-test');
+        if (test) test.onclick = () => {
+          askNotif();
+          window.RitaBridge.testReminder();
+          R.toast(anyPending() ? 'Rappel envoyé &#9829;' : 'Tout est déjà pris aujourd’hui &#9829;');
+        };
+      }
       box.querySelector('#sh-cancel').onclick = () => { R.closeSheet(); R.render(); };
       box.querySelector('#sh-new').onclick = () => openEdit(null);
+    });
+  }
+
+  // Midday reminder, read by Reminder.java: {on, t}, on at 13:00 by default.
+  const remind = () => Object.assign({ on: true, t: '13:00' }, R.data.remind || {});
+  function setRemind(on, t) {
+    R.data.remind = { on, t };
+    R.save();
+    if (on) askNotif();
+  }
+  const askNotif = () => { if (window.RitaBridge && window.RitaBridge.askNotifications) window.RitaBridge.askNotifications(); };
+  /** Same rule as Reminder.pending: a daily treatment with a due dose not logged yet. */
+  function anyPending() {
+    const k = todayKey(), now = R.toMin(R.nowHM());
+    return list().filter(m => m.mode !== 'prn').some(m => {
+      const due = (m.times || []).length ? m.times.filter(t => R.toMin(t) <= now).length : 1;
+      return takesOf(k).filter(x => x.med === m.id).length < due;
     });
   }
 
@@ -178,7 +219,9 @@ window.RitaMeds = function (R) {
         const times = sel.mode === 'prn' ? [] : [...box.querySelectorAll('[data-time]')].map(i => i.value).filter(Boolean).sort();
         if (times.length) out.times = times; else delete out.times;
         if (!med) R.data.meds.push(out);
-        R.save(); openManage();
+        R.save();
+        if (out.mode !== 'prn' && remind().on) askNotif();
+        openManage();
       };
     });
   }
