@@ -56,6 +56,18 @@
         </receiver>
 
         <receiver
+            android:name=".MiniWidget"
+            android:exported="false"
+            android:label="@string/mini_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/mini_widget_info" />
+        </receiver>
+
+        <receiver
             android:name=".MedWidget"
             android:exported="false"
             android:label="@string/med_widget_name">

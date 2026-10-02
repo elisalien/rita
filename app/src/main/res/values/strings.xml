@@ -5,6 +5,8 @@
     <string name="widget_desc">Un tap pour noter réveil, prise, pic, chute et zéro</string>
     <string name="mood_widget_name">Rita · humeur</string>
     <string name="mood_widget_desc">Note ton humeur et ton énergie en un tap, autant de fois que tu veux</string>
+    <string name="mini_widget_name">Rita · mini</string>
+    <string name="mini_widget_desc">Juste la prochaine étape : un tap la note</string>
     <string name="med_widget_name">Rita · traitement</string>
     <string name="med_widget_desc">Un petit carré à toucher une fois ton médicament pris</string>
     <string name="shortcut_crise">Crise</string>

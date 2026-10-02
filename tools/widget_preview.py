@@ -109,6 +109,7 @@ def main():
     print("wrote", OUT, (W, H), "u =", u)
     mood_preview(sprites)
     med_preview(sprites)
+    mini_preview(sprites)
 
 
 def paste_sprite(img, spr, x, y, s):
@@ -153,6 +154,29 @@ def mood_preview(sprites, W=840, H=440):
             s = max(1, min((cw - 6 * u) // sw, (ch - 6 * u) // sh))
             paste_sprite(img, spr, x0 + (cw - sw * s) // 2, y0 + (ch - sh * s) // 2, s)
     out = os.path.join(os.path.dirname(OUT), "mood_widget_preview.png")
+    img.save(out)
+    print("wrote", out, (W, H), "u =", u)
+
+
+def mini_preview(sprites, W=440, H=200):
+    """Mirrors MiniRenderer.java, wide layout: dose logged, the peak is next."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.fontmode = "1"
+    u = max(1, min(W, H) // 48)
+    sp = STEP_PAL[2]
+    frame(d, 0, 0, W, H, u, sp[0], sp[1], CREAM, CREAM)
+    s = max(1, (H - 12 * u) // 20)
+    sx, sy = 6 * u, (H - 16 * s) // 2
+    paste_sprite(img, sprites["star"], sx, sy, s)
+    tx = sx + 16 * s + 4 * u
+    big = ImageFont.truetype(os.path.join(WWW, "pixel.ttf"), 16 * u)
+    small = ImageFont.truetype(os.path.join(WWW, "pixel.ttf"), 8 * u)
+    block = 14 * u + 4 * u + 7 * u
+    top = (H - block) // 2
+    text(d, big, "Pic", tx, top + 14 * u, u, INK)
+    text(d, small, "vers 9h40", tx, top + block, u, INK2)
+    out = os.path.join(os.path.dirname(OUT), "mini_widget_preview.png")
     img.save(out)
     print("wrote", out, (W, H), "u =", u)
 

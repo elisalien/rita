@@ -21,14 +21,14 @@ final class WidgetRenderer {
     static final int CREAM = 0xFFFFFAF0, SKY = 0xFFCDEAF6, GRASS = 0xFFBFE3B0, GRASS2 = 0xFFA6D49A;
     static final int[] WOOD = {0xFFA8806C, 0xFFF2CDA4, 0xFFFDE9CC, 0xFFFFFAF0};
     static final int[] OFF = {0xFFCDB9A8, 0xFFEFE3D3, 0xFFFFFAF0, 0xFFFFFAF0};
-    private static final int[][] STEP_PAL = {
+    static final int[][] STEP_PAL = {
             {0xFFD9A54A, 0xFFFFE08A, 0xFFFFF4CF},
             {0xFFD47C98, 0xFFFFB8CB, 0xFFFFE6EE},
             {0xFF7FB86A, 0xFFBFE6A6, 0xFFEBF8E2},
             {0xFFD98B62, 0xFFFFC9A3, 0xFFFFEEDE},
             {0xFF9A84C9, 0xFFD3C4F3, 0xFFF1EBFF},
     };
-    private static final String[] SPRITE = {"sun", "pill", "star", "leaf", "moon"};
+    static final String[] SPRITE = {"sun", "pill", "star", "leaf", "moon"};
     private static final String[] WEEKDAY = {"dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."};
 
     private static Typeface font;

@@ -36,6 +36,7 @@ public class RitaWidget extends AppWidgetProvider {
 
     @Override
     public void onDisabled(Context c) {
+        if (MiniWidget.ids(c).length > 0) return; // the mini widget still needs the tick
         AlarmManager am = c.getSystemService(AlarmManager.class);
         if (am != null) am.cancel(tickIntent(c));
     }
@@ -57,7 +58,8 @@ public class RitaWidget extends AppWidgetProvider {
         AppWidgetManager m = AppWidgetManager.getInstance(c);
         int[] ids = m.getAppWidgetIds(new ComponentName(c, RitaWidget.class));
         for (int id : ids) update(c, m, id);
-        if (ids.length > 0) scheduleTick(c);
+        MiniWidget.updateAll(c);
+        if (ids.length > 0 || MiniWidget.ids(c).length > 0) scheduleTick(c);
         MoodWidget.updateAll(c); // day rollover for the mood widget too
         MedWidget.updateAll(c);
     }
@@ -102,7 +104,7 @@ public class RitaWidget extends AppWidgetProvider {
     }
 
     /** Refreshes elapsed times: every 5 min while a dose is running, else every 30 min (day rollover). */
-    private static void scheduleTick(Context c) {
+    static void scheduleTick(Context c) {
         AlarmManager am = c.getSystemService(AlarmManager.class);
         if (am == null) return;
         JSONObject data = Store.load(c);
